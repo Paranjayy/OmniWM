@@ -220,6 +220,10 @@ final class SettingsStore {
         didSet { MonitorSettingsStore.save(monitorDwindleSettings, to: defaults, key: Keys.monitorDwindleSettings) }
     }
 
+    var workspaceBackJumpEnabled: Bool {
+        didSet { defaults.set(workspaceBackJumpEnabled, forKey: Keys.workspaceBackJumpEnabled) }
+    }
+
     var preventSleepEnabled: Bool {
         didSet { defaults.set(preventSleepEnabled, forKey: Keys.preventSleepEnabled) }
     }
@@ -448,6 +452,8 @@ final class SettingsStore {
             baseline.dwindleMoveToRootStable
         monitorDwindleSettings = MonitorSettingsStore.load(from: defaults, key: Keys.monitorDwindleSettings)
 
+        workspaceBackJumpEnabled = defaults.object(forKey: Keys.workspaceBackJumpEnabled) as? Bool ??
+            baseline.workspaceBackJumpEnabled
         preventSleepEnabled = defaults.object(forKey: Keys.preventSleepEnabled) as? Bool ?? baseline.preventSleepEnabled
         scrollGestureEnabled = defaults.object(forKey: Keys.scrollGestureEnabled) as? Bool ??
             baseline.scrollGestureEnabled
@@ -951,6 +957,7 @@ private enum Keys {
 
     static let appRules = "settings.appRules"
     static let monitorOrientationSettings = "settings.monitorOrientationSettings"
+    static let workspaceBackJumpEnabled = "settings.workspace.backJumpEnabled"
     static let preventSleepEnabled = "settings.preventSleepEnabled"
     static let scrollGestureEnabled = "settings.scrollGestureEnabled"
     static let scrollSensitivity = "settings.scrollSensitivity"

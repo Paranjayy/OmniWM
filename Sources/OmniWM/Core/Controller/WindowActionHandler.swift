@@ -90,6 +90,42 @@ final class WindowActionHandler {
                 axRef: anchor.axRef
             )
         }
+
+        rescueOffscreenFloatingWindows(plan.orderedEntries)
+    }
+
+    private func rescueOffscreenFloatingWindows(_ entries: [WindowModel.Entry]) {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
+
+        for entry in entries {
+            guard let windowFrame = AXWindowService.framePreferFast(entry.axRef)
+                ?? (try? AXWindowService.frame(entry.axRef))
+            else { continue }
+
+            let isOnScreen = screens.contains { screen in
+                screen.frame.intersects(windowFrame)
+            }
+            guard !isOnScreen else { continue }
+
+            let targetScreen = screens.min(by: { a, b in
+                distanceBetween(a.frame, windowFrame) < distanceBetween(b.frame, windowFrame)
+            }) ?? screens[0]
+
+            let screenFrame = targetScreen.visibleFrame
+            let rescuedOrigin = CGPoint(
+                x: screenFrame.midX - windowFrame.width / 2,
+                y: screenFrame.midY - windowFrame.height / 2
+            )
+            let rescuedFrame = CGRect(origin: rescuedOrigin, size: windowFrame.size)
+            _ = AXWindowService.setFrame(entry.axRef, frame: rescuedFrame, currentFrameHint: windowFrame)
+        }
+    }
+
+    private func distanceBetween(_ screenFrame: CGRect, _ windowFrame: CGRect) -> CGFloat {
+        let dx = max(0, max(screenFrame.minX - windowFrame.midX, windowFrame.midX - screenFrame.maxX))
+        let dy = max(0, max(screenFrame.minY - windowFrame.midY, windowFrame.midY - screenFrame.maxY))
+        return sqrt(dx * dx + dy * dy)
     }
 
     func makeRaiseAllFloatingPlan() -> FloatingWindowRaisePlan? {
