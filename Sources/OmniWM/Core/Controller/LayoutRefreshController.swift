@@ -1053,6 +1053,14 @@ import QuartzCore
     private func buildFullRefreshExecutionPlan(reason: RefreshReason) async throws -> RefreshExecutionPlan {
         guard let controller else { return .init() }
 
+        let sessionRestoreLookup: SessionRestoreLookup? = if reason == .startup,
+            let snapshot = controller.settings.loadSessionSnapshot()
+        {
+            SessionRestoreLookup(snapshot: snapshot)
+        } else {
+            nil
+        }
+
         let windows = await controller.axManager.currentWindowsAsync()
         try Task.checkCancellation()
         var seenKeys: Set<WindowModel.WindowKey> = []
@@ -1150,7 +1158,19 @@ import QuartzCore
                 }
             } else {
                 let existingAssignment = controller.workspaceAssignment(pid: pid, windowId: winId)
-                wsForWindow = existingAssignment ?? defaultWorkspace
+                if let existingAssignment {
+                    wsForWindow = existingAssignment
+                } else if let lookup = sessionRestoreLookup,
+                          let savedWorkspace = lookup.consumeMatch(
+                              for: bundleId,
+                              title: AXWindowService.titlePreferFast(windowId: UInt32(winId)),
+                              in: controller.workspaceManager
+                          )
+                {
+                    wsForWindow = savedWorkspace
+                } else {
+                    wsForWindow = defaultWorkspace
+                }
                 ruleEffects = decision.ruleEffects
             }
             let oldMode = existingEntry?.mode
@@ -1255,6 +1275,10 @@ import QuartzCore
         effects.markInitialRefreshComplete = true
         effects.drainDeferredCreatedWindows = true
         effects.subscribeManagedWindows = true
+
+        if reason == .startup {
+            controller.settings.clearSessionSnapshot()
+        }
 
         return RefreshExecutionPlan(workspacePlans: workspacePlans, effects: effects)
     }

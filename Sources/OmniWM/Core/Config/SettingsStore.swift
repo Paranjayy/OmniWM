@@ -573,6 +573,20 @@ final class SettingsStore {
         defaults.set(data, forKey: Keys.workspaceConfigurations)
     }
 
+    func saveSessionSnapshot(_ snapshot: SessionSnapshot) {
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults.set(data, forKey: Keys.sessionSnapshot)
+    }
+
+    func loadSessionSnapshot() -> SessionSnapshot? {
+        guard let data = defaults.data(forKey: Keys.sessionSnapshot) else { return nil }
+        return try? JSONDecoder().decode(SessionSnapshot.self, from: data)
+    }
+
+    func clearSessionSnapshot() {
+        defaults.removeObject(forKey: Keys.sessionSnapshot)
+    }
+
     func effectiveMouseWarpMonitorOrder(for monitors: [Monitor], axis: MouseWarpAxis? = nil) -> [String] {
         let sortedNames = (axis ?? mouseWarpAxis).sortedMonitors(monitors).map(\.name)
         guard !sortedNames.isEmpty else { return [] }
@@ -966,4 +980,5 @@ private enum Keys {
     static let quakeTerminalCustomFrameHeight = "settings.quakeTerminal.customFrameHeight"
 
     static let appearanceMode = "settings.appearanceMode"
+    static let sessionSnapshot = "session.windowSnapshot"
 }

@@ -33,6 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bootstrapApplication()
     }
 
+    func applicationWillTerminate(_: Notification) {
+        guard let controller = AppDelegate.sharedBootstrap?.controller,
+              let settings = AppDelegate.sharedBootstrap?.settings
+        else { return }
+        controller.saveSessionSnapshot(to: settings)
+    }
+
     private func bootstrapApplication(
         defaults: UserDefaults = .standard,
         spacesRequirement: DisplaysHaveSeparateSpacesRequirement = .init()
