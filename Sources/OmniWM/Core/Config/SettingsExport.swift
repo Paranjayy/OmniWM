@@ -97,6 +97,7 @@ struct SettingsExport: Codable {
     var monitorDwindleSettings: [MonitorDwindleSettings]
 
     var preventSleepEnabled: Bool
+    var workspaceBackJumpEnabled: Bool
     var scrollGestureEnabled: Bool
     var scrollSensitivity: Double
     var scrollModifierKey: String
@@ -181,6 +182,7 @@ extension SettingsExport {
             dwindleMoveToRootStable: true,
             monitorDwindleSettings: [],
             preventSleepEnabled: false,
+            workspaceBackJumpEnabled: true,
             scrollGestureEnabled: true,
             scrollSensitivity: 5.0,
             scrollModifierKey: ScrollModifierKey.optionShift.rawValue,
@@ -367,6 +369,7 @@ extension SettingsStore {
             dwindleMoveToRootStable: dwindleMoveToRootStable,
             monitorDwindleSettings: monitorDwindleSettings,
             preventSleepEnabled: preventSleepEnabled,
+            workspaceBackJumpEnabled: workspaceBackJumpEnabled,
             scrollGestureEnabled: scrollGestureEnabled,
             scrollSensitivity: scrollSensitivity,
             scrollModifierKey: scrollModifierKey.rawValue,
@@ -501,6 +504,7 @@ extension SettingsStore {
         )
 
         preventSleepEnabled = export.preventSleepEnabled
+        workspaceBackJumpEnabled = export.workspaceBackJumpEnabled
         scrollGestureEnabled = export.scrollGestureEnabled
         scrollSensitivity = export.scrollSensitivity
         scrollModifierKey = ScrollModifierKey(rawValue: export.scrollModifierKey) ?? .optionShift

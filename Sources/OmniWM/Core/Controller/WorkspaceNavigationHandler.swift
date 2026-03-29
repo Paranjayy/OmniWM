@@ -277,7 +277,9 @@ final class WorkspaceNavigationHandler {
         if let currentWorkspace,
            currentWorkspace.name == targetName
         {
-            workspaceBackAndForth()
+            if controller.settings.workspaceBackJumpEnabled {
+                workspaceBackAndForth()
+            }
             return
         }
 

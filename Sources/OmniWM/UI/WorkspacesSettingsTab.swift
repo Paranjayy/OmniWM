@@ -87,6 +87,14 @@ struct WorkspacesSettingsTab: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            Section("Navigation") {
+                Toggle("Workspace Back-Jump", isOn: $settings.workspaceBackJumpEnabled)
+            } footer: {
+                Text("When enabled, pressing a hotkey for the already-active workspace switches to the previously visited workspace. Disable to make that hotkey a no-op.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
         .sheet(item: $editingConfig) { config in

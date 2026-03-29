@@ -209,6 +209,22 @@ final class WMController {
         refreshStatusBar()
     }
 
+    func saveSessionSnapshot(to settings: SettingsStore) {
+        let entries = workspaceManager.allEntries().compactMap { entry -> WindowSessionEntry? in
+            guard let bundleId = appInfoCache.bundleId(for: entry.pid) else { return nil }
+            guard let workspaceName = workspaceManager.descriptor(for: entry.workspaceId)?.name else { return nil }
+            let title = AXWindowService.titlePreferFast(windowId: UInt32(entry.windowId))
+            return WindowSessionEntry(
+                bundleId: bundleId,
+                workspaceName: workspaceName,
+                isFloating: entry.mode == .floating,
+                title: title
+            )
+        }
+        guard !entries.isEmpty else { return }
+        settings.saveSessionSnapshot(SessionSnapshot(entries: entries))
+    }
+
     func applyCurrentAppearanceMode() {
         settings.appearanceMode.apply()
         workspaceBarManager.updateSettings()

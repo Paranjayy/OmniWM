@@ -220,6 +220,10 @@ final class SettingsStore {
         didSet { MonitorSettingsStore.save(monitorDwindleSettings, to: defaults, key: Keys.monitorDwindleSettings) }
     }
 
+    var workspaceBackJumpEnabled: Bool {
+        didSet { defaults.set(workspaceBackJumpEnabled, forKey: Keys.workspaceBackJumpEnabled) }
+    }
+
     var preventSleepEnabled: Bool {
         didSet { defaults.set(preventSleepEnabled, forKey: Keys.preventSleepEnabled) }
     }
@@ -448,6 +452,8 @@ final class SettingsStore {
             baseline.dwindleMoveToRootStable
         monitorDwindleSettings = MonitorSettingsStore.load(from: defaults, key: Keys.monitorDwindleSettings)
 
+        workspaceBackJumpEnabled = defaults.object(forKey: Keys.workspaceBackJumpEnabled) as? Bool ??
+            baseline.workspaceBackJumpEnabled
         preventSleepEnabled = defaults.object(forKey: Keys.preventSleepEnabled) as? Bool ?? baseline.preventSleepEnabled
         scrollGestureEnabled = defaults.object(forKey: Keys.scrollGestureEnabled) as? Bool ??
             baseline.scrollGestureEnabled
@@ -571,6 +577,20 @@ final class SettingsStore {
     private func saveWorkspaceConfigurations() {
         guard let data = try? JSONEncoder().encode(workspaceConfigurations) else { return }
         defaults.set(data, forKey: Keys.workspaceConfigurations)
+    }
+
+    func saveSessionSnapshot(_ snapshot: SessionSnapshot) {
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults.set(data, forKey: Keys.sessionSnapshot)
+    }
+
+    func loadSessionSnapshot() -> SessionSnapshot? {
+        guard let data = defaults.data(forKey: Keys.sessionSnapshot) else { return nil }
+        return try? JSONDecoder().decode(SessionSnapshot.self, from: data)
+    }
+
+    func clearSessionSnapshot() {
+        defaults.removeObject(forKey: Keys.sessionSnapshot)
     }
 
     func effectiveMouseWarpMonitorOrder(for monitors: [Monitor], axis: MouseWarpAxis? = nil) -> [String] {
@@ -937,6 +957,7 @@ private enum Keys {
 
     static let appRules = "settings.appRules"
     static let monitorOrientationSettings = "settings.monitorOrientationSettings"
+    static let workspaceBackJumpEnabled = "settings.workspace.backJumpEnabled"
     static let preventSleepEnabled = "settings.preventSleepEnabled"
     static let scrollGestureEnabled = "settings.scrollGestureEnabled"
     static let scrollSensitivity = "settings.scrollSensitivity"
@@ -966,4 +987,5 @@ private enum Keys {
     static let quakeTerminalCustomFrameHeight = "settings.quakeTerminal.customFrameHeight"
 
     static let appearanceMode = "settings.appearanceMode"
+    static let sessionSnapshot = "session.windowSnapshot"
 }

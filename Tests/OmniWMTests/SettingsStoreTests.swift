@@ -517,6 +517,7 @@ private func makeSettingsTestMonitor(
             dwindleMoveToRootStable: false,
             monitorDwindleSettings: [MonitorDwindleSettings(monitorName: "TestDwindle", smartSplit: true)],
             preventSleepEnabled: true,
+            workspaceBackJumpEnabled: false,
             scrollGestureEnabled: false,
             scrollSensitivity: 2.0,
             scrollModifierKey: "option",

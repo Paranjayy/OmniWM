@@ -37,29 +37,29 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(
                 id: "focus.left",
                 command: .focus(.left),
-                binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "focus.down",
                 command: .focus(.down),
-                binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "focus.up",
                 command: .focus(.up),
-                binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "focus.right",
                 command: .focus(.right),
-                binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: UInt32(optionKey | controlKey))
             )
         ])
 
         bindings.append(HotkeyBinding(
             id: "focusPrevious",
             command: .focusPrevious,
-            binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: UInt32(optionKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: UInt32(optionKey | controlKey | shiftKey))
         ))
 
         bindings.append(contentsOf: [
@@ -71,14 +71,14 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(
                 id: "moveWindowToWorkspaceUp",
                 command: .moveWindowToWorkspaceUp,
-                binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: UInt32(optionKey | controlKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_PageUp), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "moveWindowToWorkspaceDown",
                 command: .moveWindowToWorkspaceDown,
                 binding: KeyBinding(
-                    keyCode: UInt32(kVK_DownArrow),
-                    modifiers: UInt32(optionKey | controlKey | shiftKey)
+                    keyCode: UInt32(kVK_PageDown),
+                    modifiers: UInt32(optionKey | controlKey)
                 )
             )
         ])
@@ -108,22 +108,22 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(
                 id: "move.left",
                 command: .move(.left),
-                binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: UInt32(optionKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: UInt32(optionKey | controlKey | shiftKey))
             ),
             HotkeyBinding(
                 id: "move.down",
                 command: .move(.down),
-                binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: UInt32(optionKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: UInt32(optionKey | controlKey | shiftKey))
             ),
             HotkeyBinding(
                 id: "move.up",
                 command: .move(.up),
-                binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: UInt32(optionKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: UInt32(optionKey | controlKey | shiftKey))
             ),
             HotkeyBinding(
                 id: "move.right",
                 command: .move(.right),
-                binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: UInt32(optionKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: UInt32(optionKey | controlKey | shiftKey))
             )
         ])
 
@@ -149,7 +149,7 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(
                 id: "toggleFullscreen",
                 command: .toggleFullscreen,
-                binding: KeyBinding(keyCode: UInt32(kVK_Return), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_Return), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "toggleNativeFullscreen",
@@ -163,16 +163,16 @@ enum DefaultHotkeyBindings {
                 id: "moveColumn.left",
                 command: .moveColumn(.left),
                 binding: KeyBinding(
-                    keyCode: UInt32(kVK_LeftArrow),
-                    modifiers: UInt32(optionKey | controlKey | shiftKey)
+                    keyCode: UInt32(kVK_ANSI_LeftBracket),
+                    modifiers: UInt32(optionKey | controlKey)
                 )
             ),
             HotkeyBinding(
                 id: "moveColumn.right",
                 command: .moveColumn(.right),
                 binding: KeyBinding(
-                    keyCode: UInt32(kVK_RightArrow),
-                    modifiers: UInt32(optionKey | controlKey | shiftKey)
+                    keyCode: UInt32(kVK_ANSI_RightBracket),
+                    modifiers: UInt32(optionKey | controlKey)
                 )
             )
         ])
@@ -180,19 +180,19 @@ enum DefaultHotkeyBindings {
         bindings.append(HotkeyBinding(
             id: "toggleColumnTabbed",
             command: .toggleColumnTabbed,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey | controlKey))
         ))
 
         bindings.append(contentsOf: [
             HotkeyBinding(
                 id: "focusColumnFirst",
                 command: .focusColumnFirst,
-                binding: KeyBinding(keyCode: UInt32(kVK_Home), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_Home), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "focusColumnLast",
                 command: .focusColumnLast,
-                binding: KeyBinding(keyCode: UInt32(kVK_End), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_End), modifiers: UInt32(optionKey | controlKey))
             )
         ])
 
@@ -208,24 +208,24 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(
                 id: "cycleColumnWidthForward",
                 command: .cycleColumnWidthForward,
-                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Period), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Period), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "cycleColumnWidthBackward",
                 command: .cycleColumnWidthBackward,
-                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Comma), modifiers: UInt32(optionKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Comma), modifiers: UInt32(optionKey | controlKey))
             ),
             HotkeyBinding(
                 id: "toggleColumnFullWidth",
                 command: .toggleColumnFullWidth,
-                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_F), modifiers: UInt32(optionKey | shiftKey))
+                binding: KeyBinding(keyCode: UInt32(kVK_ANSI_F), modifiers: UInt32(optionKey | controlKey | shiftKey))
             )
         ])
 
         bindings.append(HotkeyBinding(
             id: "balanceSizes",
             command: .balanceSizes,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: UInt32(optionKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: UInt32(optionKey | controlKey | shiftKey))
         ))
 
         bindings.append(HotkeyBinding(
@@ -274,7 +274,7 @@ enum DefaultHotkeyBindings {
         bindings.append(HotkeyBinding(
             id: "raiseAllFloatingWindows",
             command: .raiseAllFloatingWindows,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_R), modifiers: UInt32(optionKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_R), modifiers: UInt32(optionKey | controlKey | shiftKey))
         ))
 
         bindings.append(HotkeyBinding(
@@ -316,19 +316,19 @@ enum DefaultHotkeyBindings {
         bindings.append(HotkeyBinding(
             id: "toggleQuakeTerminal",
             command: .toggleQuakeTerminal,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Grave), modifiers: UInt32(optionKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Grave), modifiers: UInt32(optionKey | controlKey))
         ))
 
         bindings.append(HotkeyBinding(
             id: "toggleWorkspaceLayout",
             command: .toggleWorkspaceLayout,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey | controlKey | shiftKey))
         ))
 
         bindings.append(HotkeyBinding(
             id: "toggleOverview",
             command: .toggleOverview,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_O), modifiers: UInt32(optionKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_O), modifiers: UInt32(optionKey | controlKey | shiftKey))
         ))
 
         return bindings

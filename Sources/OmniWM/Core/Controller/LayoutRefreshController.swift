@@ -891,7 +891,7 @@ import QuartzCore
             return false
         }
 
-        var plan = try await buildFullRefreshExecutionPlan()
+        var plan = try await buildFullRefreshExecutionPlan(reason: reason)
         applyRefreshMetadata(refresh, to: &plan)
         try Task.checkCancellation()
         await executeRefreshExecutionPlan(plan)
@@ -1050,8 +1050,16 @@ import QuartzCore
         return RefreshExecutionPlan(workspacePlans: workspacePlans, effects: effects)
     }
 
-    private func buildFullRefreshExecutionPlan() async throws -> RefreshExecutionPlan {
+    private func buildFullRefreshExecutionPlan(reason: RefreshReason) async throws -> RefreshExecutionPlan {
         guard let controller else { return .init() }
+
+        let sessionRestoreLookup: SessionRestoreLookup? = if reason == .startup,
+            let snapshot = controller.settings.loadSessionSnapshot()
+        {
+            SessionRestoreLookup(snapshot: snapshot)
+        } else {
+            nil
+        }
 
         let windows = await controller.axManager.currentWindowsAsync()
         try Task.checkCancellation()
@@ -1150,7 +1158,19 @@ import QuartzCore
                 }
             } else {
                 let existingAssignment = controller.workspaceAssignment(pid: pid, windowId: winId)
-                wsForWindow = existingAssignment ?? defaultWorkspace
+                if let existingAssignment {
+                    wsForWindow = existingAssignment
+                } else if let lookup = sessionRestoreLookup,
+                          let savedWorkspace = lookup.consumeMatch(
+                              for: bundleId,
+                              title: AXWindowService.titlePreferFast(windowId: UInt32(winId)),
+                              in: controller.workspaceManager
+                          )
+                {
+                    wsForWindow = savedWorkspace
+                } else {
+                    wsForWindow = defaultWorkspace
+                }
                 ruleEffects = decision.ruleEffects
             }
             let oldMode = existingEntry?.mode
@@ -1191,10 +1211,13 @@ import QuartzCore
 
         let shouldPreserveMissingWindows = shouldPreserveMissingWindowsDuringNativeFullscreen(
             controller: controller
-        )
+        ) || reason == .activeSpaceChanged
         if shouldPreserveMissingWindows {
             // Native macOS fullscreen moves the app onto its own Space, so visible-window
             // enumeration temporarily excludes the rest of the managed workspace.
+            // Similarly, switching macOS native Spaces makes windows on other Spaces
+            // invisible to enumeration; preserving them here ensures their OmniWM workspace
+            // assignments and layout state survive the round-trip back to that Space.
             for entry in controller.workspaceManager.allEntries() {
                 seenKeys.insert(.init(pid: entry.handle.pid, windowId: entry.windowId))
             }
@@ -1252,6 +1275,10 @@ import QuartzCore
         effects.markInitialRefreshComplete = true
         effects.drainDeferredCreatedWindows = true
         effects.subscribeManagedWindows = true
+
+        if reason == .startup {
+            controller.settings.clearSessionSnapshot()
+        }
 
         return RefreshExecutionPlan(workspacePlans: workspacePlans, effects: effects)
     }
