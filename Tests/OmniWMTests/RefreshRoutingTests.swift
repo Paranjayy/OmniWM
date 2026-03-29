@@ -942,6 +942,40 @@ private func prepareNiriState(
         assertNoLegacyReasons(recorder)
     }
 
+    @Test @MainActor func switchWorkspaceTriggersBackJumpWhenAlreadyOnTargetAndEnabled() async {
+        let controller = makeRefreshTestController()
+        _ = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true)
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForRefreshWork(on: controller)
+
+        controller.settings.workspaceBackJumpEnabled = true
+
+        let recorder = RefreshEventRecorder()
+        installRefreshSpies(on: controller, recorder: recorder)
+
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForRefreshWork(on: controller)
+
+        #expect(!recorder.relayoutEvents.isEmpty, "expected back-jump to trigger a relayout")
+    }
+
+    @Test @MainActor func switchWorkspaceDoesNotTriggerBackJumpWhenAlreadyOnTargetAndDisabled() async {
+        let controller = makeRefreshTestController()
+        _ = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true)
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForRefreshWork(on: controller)
+
+        controller.settings.workspaceBackJumpEnabled = false
+
+        let recorder = RefreshEventRecorder()
+        installRefreshSpies(on: controller, recorder: recorder)
+
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForRefreshWork(on: controller)
+
+        #expect(recorder.relayoutEvents.isEmpty, "expected no relayout when back-jump is disabled")
+    }
+
     @Test @MainActor func workspaceSwitchCommandsRequestRememberedTargetFocus() async {
         await assertWorkspaceSwitchCommandRequestsRememberedFocus { controller in
             controller.workspaceNavigationHandler.switchWorkspace(index: 1)
