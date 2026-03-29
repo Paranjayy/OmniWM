@@ -2,18 +2,14 @@
     "workspaceConfigurations": [
         { "id": "WS1", "layoutType": "niri", "monitorAssignment": { "type": "main" }, "name": "1" },
         { "id": "WS2", "layoutType": "niri", "monitorAssignment": { "type": "main" }, "name": "2" },
-        { "id": "WS3", "layoutType": "niri", "monitorAssignment": { "type": "main" }, "name": "3" }
+        { "id": "WS3", "layoutType": "niri", "monitorAssignment": { "type": "main" }, "name": "3" },
+        { "id": "WS4", "layoutType": "niri", "monitorAssignment": { "type": "main" }, "name": "4" }
     ],
     "hotkeyBindings": [
         { "binding": "Option+Command+Control+Shift+1", "id": "switchWorkspace.0" },
         { "binding": "Option+Command+Control+Shift+2", "id": "switchWorkspace.1" },
         { "binding": "Option+Command+Control+Shift+3", "id": "switchWorkspace.2" },
         { "binding": "Option+Command+Control+Shift+4", "id": "switchWorkspace.3" },
-        { "binding": "Option+Command+Control+Shift+5", "id": "switchWorkspace.4" },
-        { "binding": "Option+Command+Control+Shift+6", "id": "switchWorkspace.5" },
-        { "binding": "Option+Command+Control+Shift+7", "id": "switchWorkspace.6" },
-        { "binding": "Option+Command+Control+Shift+8", "id": "switchWorkspace.7" },
-        { "binding": "Option+Command+Control+Shift+9", "id": "switchWorkspace.8" },
 
         { "binding": "Option+Command+Control+Shift+F1", "id": "moveToWorkspace.0" },
         { "binding": "Option+Command+Control+Shift+F2", "id": "moveToWorkspace.1" },
@@ -29,12 +25,11 @@
         { "binding": "Option+Command+Control+Shift+S", "id": "move.down" },
         { "binding": "Option+Command+Control+Shift+D", "id": "move.right" },
 
-        { "binding": "Option+Command+Control+Shift+X", "id": "resizeGrow.up" },
-        { "binding": "Option+Command+Control+Shift+Y", "id": "resizeGrow.down" },
-
         { "binding": "Option+Command+Control+Shift+Return", "id": "toggleFullscreen" },
         { "binding": "Option+Command+Control+Shift+Space", "id": "toggleFocusedWindowFloating" },
         { "binding": "Option+Command+Control+Shift+L", "id": "toggleWorkspaceLayout" },
+        { "binding": "Option+Command+Control+Shift+R", "id": "raiseAllFloatingWindows" },
+        { "binding": "Option+Command+Control+Shift+P", "id": "openCommandPalette" },
         
         { "binding": "Option+Command+Control+1", "id": "focusColumn.0" },
         { "binding": "Option+Command+Control+2", "id": "focusColumn.1" },

@@ -1,35 +1,76 @@
 {
-    "title": "OmniKey v12 - POSITION & FOCUS REBORN",
+    "title": "OmniKey v15 - THE RESTORATION",
     "rules": [
         {
-            "description": "[Trigger] Right Option -> Nav/Focus Layer (Skip if Shift held)",
+            "description": "[Trigger] Right Option Layer (Shift Bypasses for Fine-Tuning)",
             "manipulators": [
                 {
                     "type": "basic",
+                    "from": { "key_code": "right_option", "modifiers": { "mandatory": ["shift"], "optional": ["any"] } },
+                    "to": [{ "key_code": "right_option", "modifiers": ["shift"] }],
+                    "description": "Shift+ROpt = Pass through exactly (Fixes fine-tuning!)"
+                },
+                {
+                    "type": "basic",
                     "from": { "key_code": "right_option", "modifiers": { "optional": ["any"] } },
-                    "conditions": [{ "type": "modifier_if", "on": ["shift"], "halt": true }],
-                    "to": [{ "set_variable": { "name": "right_opt_layer", "value": 1 } }],
-                    "to_after_key_up": [{ "set_variable": { "name": "right_opt_layer", "value": 0 } }],
+                    "to": [
+                        { "key_code": "right_option" }, 
+                        { "set_variable": { "name": "right_opt_layer", "value": 1 } }
+                    ],
+                    "to_after_key_up": [
+                        { "set_variable": { "name": "right_opt_layer", "value": 0 } }
+                    ],
                     "to_if_alone": [{ "key_code": "right_option" }],
                     "parameters": { "basic.to_if_alone_timeout_milliseconds": 150 }
                 }
             ]
         },
         {
-            "description": "[Trigger] Right Command -> Window Management Layer",
+            "description": "[Trigger] Right Command Layer",
             "manipulators": [
                 {
                     "type": "basic",
                     "from": { "key_code": "right_command", "modifiers": { "optional": ["any"] } },
-                    "to": [{ "set_variable": { "name": "rcmd_layer", "value": 1 } }],
-                    "to_after_key_up": [{ "set_variable": { "name": "rcmd_layer", "value": 0 } }],
+                    "to": [
+                        { "key_code": "right_command" },
+                        { "set_variable": { "name": "rcmd_layer", "value": 1 } }
+                    ],
+                    "to_after_key_up": [
+                        { "set_variable": { "name": "rcmd_layer", "value": 0 } }
+                    ],
                     "to_if_alone": [{ "key_code": "right_command" }],
                     "parameters": { "basic.to_if_alone_timeout_milliseconds": 150 }
                 }
             ]
         },
         {
-            "description": "[Right Opt Layer] WASD/Arrows=FOCUS | HJKL=Words | 1-9=Focus Column",
+            "description": "[RCmd Layer] Workspace Switch/Move | WASD Move | Space Palette",
+            "manipulators": [
+                { "type": "basic", "from": { "key_code": "spacebar" }, "to": [{ "key_code": "p", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "1", "modifiers": { "mandatory": ["shift"] } }, "to": [{ "key_code": "f1", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "2", "modifiers": { "mandatory": ["shift"] } }, "to": [{ "key_code": "f2", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "3", "modifiers": { "mandatory": ["shift"] } }, "to": [{ "key_code": "f3", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "1" }, "to": [{ "key_code": "1", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "2" }, "to": [{ "key_code": "2", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "3" }, "to": [{ "key_code": "3", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "4" }, "to": [{ "key_code": "4", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "5" }, "to": [{ "key_code": "5", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "6" }, "to": [{ "key_code": "6", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "7" }, "to": [{ "key_code": "7", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "8" }, "to": [{ "key_code": "8", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "9" }, "to": [{ "key_code": "9", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "w", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "a", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "s" }, "to": [{ "key_code": "s", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "d" }, "to": [{ "key_code": "d", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "f" }, "to": [{ "key_code": "return_or_enter", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "return_or_enter" }, "to": [{ "key_code": "return_or_enter", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "g" }, "to": [{ "key_code": "spacebar", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "r" }, "to": [{ "key_code": "r", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+            ]
+        },
+        {
+            "description": "[Right Opt Layer] WASD Focus Window | 1-9 Focus App/Column | HJKL Nav",
             "manipulators": [
                 { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "up_arrow", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "left_arrow", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
@@ -38,44 +79,13 @@
                 { "type": "basic", "from": { "key_code": "1" }, "to": [{ "key_code": "1", "modifiers": ["option", "command", "control"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "2" }, "to": [{ "key_code": "2", "modifiers": ["option", "command", "control"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "3" }, "to": [{ "key_code": "3", "modifiers": ["option", "command", "control"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                { "type": "basic", "from": { "key_code": "4" }, "to": [{ "key_code": "4", "modifiers": ["option", "command", "control"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "h" }, "to": [{ "key_code": "left_arrow", "modifiers": ["option"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "l" }, "to": [{ "key_code": "right_arrow", "modifiers": ["option"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "j" }, "to": [{ "key_code": "page_down" }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "k" }, "to": [{ "key_code": "page_up" }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "u" }, "to": [{ "key_code": "left_arrow", "modifiers": ["command"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "o" }, "to": [{ "key_code": "right_arrow", "modifiers": ["command"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "left_arrow" }, "to": [{ "key_code": "left_arrow", "modifiers": ["option"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                 { "type": "basic", "from": { "key_code": "right_arrow" }, "to": [{ "key_code": "right_arrow", "modifiers": ["option"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] }
-            ]
-        },
-        {
-            "description": "[RCmd Layer] WASD=POSITION (Move) | Shift+WASD=RESIZE | F/Enter=Fullscreen | 1-9=WSpace Switch",
-            "manipulators": [
-                { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "w", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "a", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "s" }, "to": [{ "key_code": "s", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "d" }, "to": [{ "key_code": "d", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "f" }, "to": [{ "key_code": "return_or_enter", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "return_or_enter" }, "to": [{ "key_code": "return_or_enter", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "g" }, "to": [{ "key_code": "spacebar", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "l" }, "to": [{ "key_code": "l", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "1" }, "to": [{ "key_code": "1", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "2" }, "to": [{ "key_code": "2", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "3" }, "to": [{ "key_code": "3", "modifiers": ["option", "command", "control", "shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
-            ]
-        },
-        {
-            "description": "[Sequences] Hyper+A=Launch Apps",
-            "manipulators": [
-                {
-                    "type": "basic",
-                    "from": { "key_code": "a", "modifiers": { "mandatory": ["command", "option", "control", "shift"] } },
-                    "to": [{ "set_variable": { "name": "seq_a", "value": 1 } }],
-                    "to_delayed_action": { "to_if_invoked": [{ "set_variable": { "name": "seq_a", "value": 0 } }], "to_if_canceled": [{ "set_variable": { "name": "seq_a", "value": 0 } }] },
-                    "parameters": { "basic.to_delayed_action_delay_milliseconds": 1500 }
-                },
-                { "type": "basic", "from": { "key_code": "a" }, "to": [{ "shell_command": "open -a Arc" }, { "set_variable": { "name": "seq_a", "value": 0 } }], "conditions": [{ "type": "variable_if", "name": "seq_a", "value": 1 }] },
-                { "type": "basic", "from": { "key_code": "c" }, "to": [{ "shell_command": "open -a Cursor" }, { "set_variable": { "name": "seq_a", "value": 0 } }], "conditions": [{ "type": "variable_if", "name": "seq_a", "value": 1 }] }
             ]
         }
     ]
