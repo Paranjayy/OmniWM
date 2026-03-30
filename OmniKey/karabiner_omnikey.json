@@ -222,7 +222,7 @@
                         ]
                     },
                     {
-                        "description": "[ROpt Layer] Brightness/Volume Fine-tune (Opt+Shift+Key)",
+                        "description": "[ROpt Layer] Brightness/Volume Fine-tune (Opt+Shift+Key via consumer_key_code)",
                         "manipulators": [
                             {
                                 "type": "basic",
@@ -417,7 +417,7 @@
                         ]
                     },
                     {
-                        "description": "[RCmd Layer] F=ToggleFullWidth | Enter=ToggleFullscreen | Space=CommandPalette | R=RaiseFloating | G=ToggleFloating",
+                        "description": "[RCmd Layer] F=ToggleFullWidth | Enter=ToggleFullscreen | Space=CommandPalette | R=RaiseFloating | G=ToggleFloating | O=Overview | B=Balance | Tab=FocusPrev",
                         "manipulators": [
                             {
                                 "type": "basic",
