@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniKey Visual Configurator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --surface: #141923;
+            --surface-hover: #1c2331;
+            --accent: #60a5fa;
+            --accent-rgb: 96, 165, 250;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --key-bg: #1e293b;
+            --key-active: #3b82f6;
+            --trigger-ropt: #fbbf24;
+            --trigger-rcmd: #ef4444;
+            --border: #334155;
+            --glass: rgba(20, 25, 35, 0.7);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            overflow-x: hidden;
+            background: radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.05), transparent),
+                        radial-gradient(circle at bottom left, rgba(var(--accent-rgb), 0.05), transparent);
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .main-editor {
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            overflow-y: auto;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin: 0;
+            background: linear-gradient(to right, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .keyboard-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .layer-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .layer-tab {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            background: var(--key-bg);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .layer-tab:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .layer-tab.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.3);
+        }
+
+        .keyboard {
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .key-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .key {
+            background: var(--key-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .key:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+        }
+
+        .key.active {
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.1);
+            color: var(--accent);
+        }
+
+        .key.mapped::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .key.trigger-ropt { border-color: var(--trigger-ropt); color: var(--trigger-ropt); }
+        .key.trigger-rcmd { border-color: var(--trigger-rcmd); color: var(--trigger-rcmd); }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+        }
+
+        input[type="text"], select {
+            background: #0b0e14;
+            border: 1px solid var(--border);
+            padding: 0.8rem 1rem;
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .json-viewer {
+            flex-grow: 1;
+            background: #010409;
+            border-radius: 12px;
+            padding: 1rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            color: #d1d5db;
+        }
+
+        button.btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+        }
+
+        button.btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            background: rgba(var(--accent-rgb), 0.1);
+            color: var(--accent);
+            margin-left: 0.5rem;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <main class="main-editor">
+            <header>
+                <h1>OmniKey Editor</h1>
+                <p style="color: var(--text-secondary)">Premium Visual Configuration Suite</p>
+            </header>
+
+            <div class="keyboard-card">
+                <div class="layer-tabs">
+                    <div class="layer-tab" id="tab-base" onclick="setLayer('base')">Base</div>
+                    <div class="layer-tab active" id="tab-ropt" onclick="setLayer('ropt')">Nav Layer (ROpt)</div>
+                    <div class="layer-tab" id="tab-rcmd" onclick="setLayer('rcmd')">WM Layer (RCmd)</div>
+                </div>
+
+                <div id="keyboard" class="keyboard"></div>
+            </div>
+
+            <div style="background: var(--surface); padding: 1.5rem; border-radius: 20px; border: 1px solid var(--border);">
+                <h3 style="margin-top: 0">Mapping: <span id="sel-key">None Selected</span></h3>
+                <div id="mapping-controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <!-- Controls go here -->
+                </div>
+            </div>
+        </main>
+
+        <aside class="sidebar">
+            <h2 style="margin: 0; color: var(--accent)">JSON Output</h2>
+            <div id="json-preview" class="json-viewer"></div>
+            <button class="btn-primary" onclick="copyToClipboard()">Copy JSON for Karabiner</button>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); text-align: center;">Paste this output into your <code>karabiner.json</code> rules array.</p>
+        </aside>
+    </div>
+
+    <script>
+        const state = {
+            currentLayer: 'ropt',
+            selectedKey: null,
+            layers: {
+                base: {},
+                ropt: {
+                    'w': { to: 'up_arrow', mods: ['opt', 'ctrl'] },
+                    'a': { to: 'left_arrow', mods: ['opt', 'ctrl'] },
+                    's': { to: 'down_arrow', mods: ['opt', 'ctrl'] },
+                    'd': { to: 'right_arrow', mods: ['opt', 'ctrl'] },
+                    'h': { to: 'left_arrow', bundle: 'com.apple.finder' },
+                    'l': { to: 'right_arrow', bundle: 'com.apple.finder' }
+                },
+                rcmd: {
+                    '1': { to: '1', mods: ['opt'] },
+                    'f': { to: 'f', mods: ['opt', 'ctrl', 'shift'] },
+                    'return_or_enter': { to: 'return_or_enter', mods: ['opt', 'ctrl'] },
+                    'spacebar': { to: 'spacebar', mods: ['opt', 'ctrl'] }
+                }
+            }
+        };
+
+        const keys = [
+            ['esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'back'],
+            ['tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
+            ['caps', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'enter'],
+            ['lshift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'rshift'],
+            ['lctrl', 'lopt', 'lcmd', 'spacebar', 'rcmd', 'ropt', 'rctrl']
+        ];
+
+        function init() {
+            renderKeyboard();
+            renderPreview();
+        }
+
+        function setLayer(l) {
+            state.currentLayer = l;
+            document.querySelectorAll('.layer-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + l).classList.add('active');
+            renderKeyboard();
+            renderPreview();
+        }
+
+        function renderKeyboard() {
+            const container = document.getElementById('keyboard');
+            container.innerHTML = '';
+            keys.forEach(row => {
+                const r = document.createElement('div');
+                r.className = 'key-row';
+                row.forEach(k => {
+                    const key = document.createElement('div');
+                    key.className = 'key';
+                    if (k === 'ropt') key.classList.add('trigger-ropt');
+                    if (k === 'rcmd') key.classList.add('trigger-rcmd');
+                    if (state.layers[state.currentLayer][k]) key.classList.add('mapped');
+                    if (state.selectedKey === k) key.classList.add('active');
+                    
+                    key.innerText = k.toUpperCase().substring(0, 4);
+                    key.onclick = () => selectKey(k);
+                    r.appendChild(key);
+                });
+                container.appendChild(r);
+            });
+        }
+
+        function selectKey(k) {
+            state.selectedKey = k;
+            document.getElementById('sel-key').innerText = k.toUpperCase();
+            const config = state.layers[state.currentLayer][k] || { to: '', mods: [] };
+            
+            const controls = document.getElementById('mapping-controls');
+            controls.innerHTML = `
+                <div class="form-group">
+                    <label>Action Key Code</label>
+                    <input type="text" value="${config.to || ''}" oninput="updateMapping('${k}', 'to', this.value)" placeholder="e.g. up_arrow">
+                </div>
+                <div class="form-group">
+                    <label>App Bundle ID (Constraint)</label>
+                    <input type="text" value="${config.bundle || ''}" oninput="updateMapping('${k}', 'bundle', this.value)" placeholder="e.g. com.apple.finder">
+                </div>
+                <div class="form-group" style="grid-column: span 2">
+                    <label>Modifiers</label>
+                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                        <label style="color: var(--text-primary)"><input type="checkbox" ${config.mods?.includes('cmd') ? 'checked' : ''} onchange="toggleMod('${k}', 'cmd')"> Cmd</label>
+                        <label style="color: var(--text-primary)"><input type="checkbox" ${config.mods?.includes('opt') ? 'checked' : ''} onchange="toggleMod('${k}', 'opt')"> Opt</label>
+                        <label style="color: var(--text-primary)"><input type="checkbox" ${config.mods?.includes('ctrl') ? 'checked' : ''} onchange="toggleMod('${k}', 'ctrl')"> Ctrl</label>
+                        <label style="color: var(--text-primary)"><input type="checkbox" ${config.mods?.includes('shift') ? 'checked' : ''} onchange="toggleMod('${k}', 'shift')"> Shift</label>
+                    </div>
+                </div>
+            `;
+            renderKeyboard();
+        }
+
+        function updateMapping(k, field, val) {
+            if (!state.layers[state.currentLayer][k]) state.layers[state.currentLayer][k] = { to: '', mods: [] };
+            state.layers[state.currentLayer][k][field] = val;
+            if (!val && field === 'to') delete state.layers[state.currentLayer][k];
+            renderPreview();
+        }
+
+        function toggleMod(k, mod) {
+            if (!state.layers[state.currentLayer][k]) state.layers[state.currentLayer][k] = { to: '', mods: [] };
+            const mods = state.layers[state.currentLayer][k].mods || [];
+            const idx = mods.indexOf(mod);
+            if (idx === -1) mods.push(mod);
+            else mods.splice(idx, 1);
+            state.layers[state.currentLayer][k].mods = mods;
+            renderPreview();
+        }
+
+        function renderPreview() {
+            const layerTrigger = state.currentLayer === 'ropt' ? 'right_opt_layer' : 'rcmd_layer';
+            const rules = [];
+            
+            Object.entries(state.layers[state.currentLayer]).forEach(([from, cfg]) => {
+                if (!cfg.to) return;
+                const rule = {
+                    type: "basic",
+                    from: { key_code: from.replace('spacebar', 'space_bar') },
+                    to: [{ key_code: cfg.to, modifiers: cfg.mods?.map(m => 'left_' + m) || [] }],
+                    conditions: [{ type: "variable_if", name: layerTrigger, value: 1 }]
+                };
+                if (cfg.bundle) {
+                    rule.conditions.push({ type: "frontmost_application_if", bundle_identifiers: ["^" + cfg.bundle.replace(/\./g, "\\.") + "$"] });
+                }
+                rules.push(rule);
+            });
+
+            const output = {
+                description: "OmniKey Custom " + state.currentLayer.toUpperCase() + " Shortcuts",
+                manipulators: rules
+            };
+
+            document.getElementById('json-preview').innerText = JSON.stringify(output, null, 4);
+        }
+
+        function copyToClipboard() {
+            const text = document.getElementById('json-preview').innerText;
+            navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+        }
+
+        init();
+    </script>
+</body>
+</html>

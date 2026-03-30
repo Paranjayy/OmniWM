@@ -27,10 +27,25 @@ def is_omnikey_rule(rule):
     """Match any rule we've ever injected, using multiple indicators."""
     desc = rule.get("description", "")
     markers = [
-        "OmniKey", "[Global]", "[RCmd Layer]", "[Right Opt Layer]",
-        "[Context:", "[Sequence]", "space_layer", "right_opt_layer",
-        "seq_move_window", "seq_launch_app", "seq_system",
-        "Hyper (CapsLock)", "Right Option (held)", "Right Command (held)"
+        "OmniKey", 
+        "OmniWM", 
+        "[Global]", 
+        "[RCmd Layer]", 
+        "[Right Opt Layer]",
+        "[Nav Layer]", 
+        "[Window Layer]",
+        "[Context:", 
+        "[Sequence]", 
+        "space_layer", 
+        "right_opt_layer",
+        "seq_move_window", 
+        "seq_launch_app", 
+        "seq_system",
+        "Hyper (CapsLock)", 
+        "Right Option (held)", 
+        "Right Command (held)",
+        "Right Option + key",
+        "Caps Lock held"
     ]
     return any(m in desc for m in markers)
 

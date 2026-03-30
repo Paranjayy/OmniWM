@@ -1,0 +1,42 @@
+{
+    "version": 1,
+    "hotkeysEnabled": true,
+    "hotkeyBindings": [
+        { "id": "switchWorkspace.0", "binding": { "keyCode": 18, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.1", "binding": { "keyCode": 19, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.2", "binding": { "keyCode": 20, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.3", "binding": { "keyCode": 21, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.4", "binding": { "keyCode": 23, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.5", "binding": { "keyCode": 22, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.6", "binding": { "keyCode": 26, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.7", "binding": { "keyCode": 28, "modifiers": ["option"] } },
+        { "id": "switchWorkspace.8", "binding": { "keyCode": 25, "modifiers": ["option"] } },
+
+        { "id": "moveToWorkspace.0", "binding": { "keyCode": 18, "modifiers": ["option", "shift"] } },
+        { "id": "moveToWorkspace.1", "binding": { "keyCode": 19, "modifiers": ["option", "shift"] } },
+        { "id": "moveToWorkspace.2", "binding": { "keyCode": 20, "modifiers": ["option", "shift"] } },
+        { "id": "moveToWorkspace.3", "binding": { "keyCode": 21, "modifiers": ["option", "shift"] } },
+
+        { "id": "focus.up", "binding": { "keyCode": 126, "modifiers": ["option", "control"] } },
+        { "id": "focus.down", "binding": { "keyCode": 125, "modifiers": ["option", "control"] } },
+        { "id": "focus.left", "binding": { "keyCode": 123, "modifiers": ["option", "control"] } },
+        { "id": "focus.right", "binding": { "keyCode": 124, "modifiers": ["option", "control"] } },
+
+        { "id": "move.up", "binding": { "keyCode": 126, "modifiers": ["option", "control", "shift"] } },
+        { "id": "move.down", "binding": { "keyCode": 125, "modifiers": ["option", "control", "shift"] } },
+        { "id": "move.left", "binding": { "keyCode": 123, "modifiers": ["option", "control", "shift"] } },
+        { "id": "move.right", "binding": { "keyCode": 124, "modifiers": ["option", "control", "shift"] } },
+
+        { "id": "toggleFullscreen", "binding": { "keyCode": 36, "modifiers": ["option", "control"] } },
+        
+        { "id": "focusColumn.0", "binding": { "keyCode": 18, "modifiers": ["option", "control"] } },
+        { "id": "focusColumn.1", "binding": { "keyCode": 19, "modifiers": ["option", "control"] } },
+        { "id": "focusColumn.2", "binding": { "keyCode": 20, "modifiers": ["option", "control"] } }
+    ],
+    "appearanceMode": "dark",
+    "bordersEnabled": true,
+    "borderWidth": 5.0,
+    "gapSize": 8.0,
+    "niriMaxVisibleColumns": 2,
+    "defaultLayoutType": "niri"
+}
