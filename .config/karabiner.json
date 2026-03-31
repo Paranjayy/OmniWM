@@ -1,0 +1,170 @@
+{
+    "profiles": [
+        {
+            "complex_modifications": {
+                "rules": [
+
+                    {
+                        "description": "OmniWM: [ROpt] Brightness fine-tune - MUST be first rule",
+                        "manipulators": [
+                            {
+                                "type": "basic",
+                                "from": { "consumer_key_code": "display_brightness_increment", "modifiers": { "optional": ["any"] } },
+                                "to": [{ "consumer_key_code": "display_brightness_increment", "modifiers": ["left_shift"] }],
+                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
+                            },
+                            {
+                                "type": "basic",
+                                "from": { "consumer_key_code": "display_brightness_decrement", "modifiers": { "optional": ["any"] } },
+                                "to": [{ "consumer_key_code": "display_brightness_decrement", "modifiers": ["left_shift"] }],
+                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
+                            }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [ROpt] Volume fine-tune - MUST be first rule",
+                        "manipulators": [
+                            {
+                                "type": "basic",
+                                "from": { "consumer_key_code": "volume_increment", "modifiers": { "optional": ["any"] } },
+                                "to": [{ "consumer_key_code": "volume_increment", "modifiers": ["left_shift"] }],
+                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
+                            },
+                            {
+                                "type": "basic",
+                                "from": { "consumer_key_code": "volume_decrement", "modifiers": { "optional": ["any"] } },
+                                "to": [{ "consumer_key_code": "volume_decrement", "modifiers": ["left_shift"] }],
+                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
+                            }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [ROpt] hold = nav layer | tap alone = right_option",
+                        "manipulators": [{
+                            "type": "basic",
+                            "from": { "key_code": "right_option", "modifiers": { "optional": ["any"] } },
+                            "to": [
+                                { "set_variable": { "name": "ropt_layer", "value": 1 } },
+                                { "key_code": "left_option" }
+                            ],
+                            "to_after_key_up": [{ "set_variable": { "name": "ropt_layer", "value": 0 } }],
+                            "to_if_alone": [{ "key_code": "right_option" }],
+                            "parameters": { "basic.to_if_alone_timeout_milliseconds": 200 }
+                        }]
+                    },
+
+                    {
+                        "description": "OmniWM: [RCmd] hold = WM layer | tap alone = right_command",
+                        "manipulators": [{
+                            "type": "basic",
+                            "from": { "key_code": "right_command", "modifiers": { "optional": ["any"] } },
+                            "to": [
+                                { "set_variable": { "name": "rcmd_layer", "value": 1 } },
+                                { "key_code": "vk_none" }
+                            ],
+                            "to_after_key_up": [{ "set_variable": { "name": "rcmd_layer", "value": 0 } }],
+                            "to_if_alone": [{ "key_code": "right_command" }],
+                            "parameters": { "basic.to_if_alone_timeout_milliseconds": 200 }
+                        }]
+                    },
+
+                    {
+                        "description": "OmniWM: [RCmd+Shift] 1-9 = Move window to workspace (Ctrl+Cmd+Shift+N)",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "1", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "1", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "2", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "2", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "3", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "3", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "4", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "4", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "5", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "5", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "6", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "6", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "7", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "7", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "8", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "8", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "9", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "9", "modifiers": ["left_control", "left_command", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [RCmd] 1-9 = Switch workspace (Ctrl+Cmd+N)",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "1" }, "to": [{ "key_code": "1", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "2" }, "to": [{ "key_code": "2", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "3" }, "to": [{ "key_code": "3", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "4" }, "to": [{ "key_code": "4", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "5" }, "to": [{ "key_code": "5", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "6" }, "to": [{ "key_code": "6", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "7" }, "to": [{ "key_code": "7", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "8" }, "to": [{ "key_code": "8", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "9" }, "to": [{ "key_code": "9", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [RCmd+Shift] WASD = Move window physically (Ctrl+Opt+Shift+Arrows)",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "w", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "a", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "s", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "d", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [RCmd] WASD=MoveInBar | F/Enter=Fullscreen | O=Overview | G=Float | R=Raise | Space=Palette | Tab=BackForth",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "s" }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "d" }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "f" },               "to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "return_or_enter" }, "to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "o" },               "to": [{ "key_code": "o",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "g" },               "to": [{ "key_code": "g",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "r" },               "to": [{ "key_code": "r",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "spacebar" },        "to": [{ "key_code": "spacebar", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "tab" },             "to": [{ "key_code": "tab",      "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [ROpt+Shift] WASD = Move physically (Ctrl+Opt+Shift+Arrows)",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "w", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "a", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "s", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "d", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] }
+                        ]
+                    },
+
+                    {
+                        "description": "OmniWM: [ROpt] WASD=Focus | 1-9=FocusCol | Space=Raycast | Tab=FocusPrev | Q=Quake",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "s" }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "d" }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "1" }, "to": [{ "key_code": "1", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "2" }, "to": [{ "key_code": "2", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "3" }, "to": [{ "key_code": "3", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "4" }, "to": [{ "key_code": "4", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "5" }, "to": [{ "key_code": "5", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "6" }, "to": [{ "key_code": "6", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "7" }, "to": [{ "key_code": "7", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "8" }, "to": [{ "key_code": "8", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "9" }, "to": [{ "key_code": "9", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "spacebar" }, "to": [{ "key_code": "spacebar", "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "tab" },      "to": [{ "key_code": "tab",      "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "q" },        "to": [{ "key_code": "grave_accent_and_tilde", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] }
+                        ]
+                    }
+
+                ]
+            },
+            "devices": [],
+            "name": "Default profile",
+            "selected": true,
+            "virtual_hid_keyboard": { "keyboard_type_v2": "ansi" }
+        }
+    ]
+}
