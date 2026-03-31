@@ -100,15 +100,6 @@
                         ]
                     },
 
-                    {
-                        "description": "OmniWM: [RCmd+Shift] WASD = Move window physically (Ctrl+Opt+Shift+Arrows)",
-                        "manipulators": [
-                            { "type": "basic", "from": { "key_code": "w", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "a", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "s", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "d", "modifiers": { "mandatory": ["left_shift"] } }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
-                        ]
-                    },
 
                     {
                         "description": "OmniWM: [RCmd] WASD=MoveInBar | F/Enter=Fullscreen | O=Overview | G=Float | R=Raise | Space=Palette | Tab=BackForth",
