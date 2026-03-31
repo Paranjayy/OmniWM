@@ -5,11 +5,14 @@ import Observation
 final class AppBootstrapState {
     var settings: SettingsStore?
     var controller: WMController?
+    var updateCoordinator: (any AppUpdateCoordinating)?
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     nonisolated(unsafe) static weak var sharedBootstrap: AppBootstrapState?
+    static var ipcServerFactoryForTests: ((WMController) -> IPCServerLifecycle)?
+    static var updateCoordinatorFactoryForTests: ((SettingsStore, WMController, UserDefaults) -> any AppUpdateCoordinating)?
     private static let desktopAndDockSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.Desktop-Settings.extension"
     )!
@@ -27,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var statusBarController: StatusBarController?
+    private var ipcServer: IPCServerLifecycle?
+    private var cliManager: AppCLIManager?
+    private var updateCoordinator: (any AppUpdateCoordinating)?
 
     func applicationDidFinishLaunching(_: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -34,13 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
-        guard let controller = AppDelegate.sharedBootstrap?.controller,
-              let settings = AppDelegate.sharedBootstrap?.settings
-        else { return }
-        controller.saveSessionSnapshot(to: settings)
+        stopIPCServer()
     }
 
-    private func bootstrapApplication(
+    func bootstrapApplication(
         defaults: UserDefaults = .standard,
         spacesRequirement: DisplaysHaveSeparateSpacesRequirement = .init()
     ) {
@@ -54,25 +57,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func finishBootstrap(defaults: UserDefaults) {
+    func finishBootstrap(defaults: UserDefaults) {
         SettingsMigration.persistCurrentEpoch(defaults: defaults)
 
         let settings = SettingsStore(defaults: defaults)
         let hiddenBarController = HiddenBarController(settings: settings)
         let controller = WMController(settings: settings, hiddenBarController: hiddenBarController)
         controller.applyPersistedSettings(settings)
+        let cliManager = AppCLIManager()
+        let updateCoordinator = Self.updateCoordinatorFactoryForTests?(settings, controller, defaults)
+            ?? UpdateCoordinator(settings: settings, defaults: defaults)
+        self.cliManager = cliManager
+        self.updateCoordinator = updateCoordinator
 
         AppDelegate.sharedBootstrap?.settings = settings
         AppDelegate.sharedBootstrap?.controller = controller
+        AppDelegate.sharedBootstrap?.updateCoordinator = updateCoordinator
 
         statusBarController = StatusBarController(
             settings: settings,
             controller: controller,
             hiddenBarController: hiddenBarController,
-            defaults: defaults
+            defaults: defaults,
+            cliManager: cliManager,
+            updateCoordinator: updateCoordinator
         )
         controller.statusBarController = statusBarController
+        settings.onIPCEnabledChanged = { [weak self, weak controller] isEnabled in
+            guard let self, let controller else { return }
+            do {
+                try self.setIPCEnabled(isEnabled, controller: controller)
+            } catch {
+                self.presentInfoAlert(
+                    title: "IPC Failed to Start",
+                    message: error.localizedDescription
+                )
+                if isEnabled {
+                    settings.ipcEnabled = false
+                }
+            }
+            self.statusBarController?.refreshMenu()
+        }
         statusBarController?.setup()
+        do {
+            try setIPCEnabled(settings.ipcEnabled, controller: controller)
+        } catch {
+            presentInfoAlert(
+                title: "IPC Failed to Start",
+                message: error.localizedDescription
+            )
+            settings.ipcEnabled = false
+        }
+        updateCoordinator.startAutomaticChecks()
+    }
+
+    func startIPCServer(controller: WMController) throws {
+        if ipcServer != nil {
+            stopIPCServer()
+        }
+        let server = Self.ipcServerFactoryForTests?(controller) ?? IPCServer(controller: controller)
+        try server.start()
+        ipcServer = server
+    }
+
+    func setIPCEnabled(_ enabled: Bool, controller: WMController) throws {
+        if enabled {
+            try startIPCServer(controller: controller)
+        } else {
+            stopIPCServer()
+        }
+    }
+
+    private func stopIPCServer() {
+        ipcServer?.stop()
+        ipcServer = nil
     }
 
     private func runStartupResetGate(storedEpoch: Int?, defaults: UserDefaults) {

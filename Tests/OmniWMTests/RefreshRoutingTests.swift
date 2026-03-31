@@ -11,21 +11,20 @@ private func makeRefreshTestDefaults() -> UserDefaults {
 }
 
 private func makeRefreshTestMonitor(
-    displayId: CGDirectDisplayID = 1,
+    displayId: CGDirectDisplayID = layoutPlanTestMainDisplayId(),
     name: String = "Main",
     x: CGFloat = 0,
     y: CGFloat = 0,
     width: CGFloat = 1920,
     height: CGFloat = 1080
 ) -> Monitor {
-    let frame = CGRect(x: x, y: y, width: width, height: height)
-    return Monitor(
-        id: Monitor.ID(displayId: displayId),
+    makeLayoutPlanTestMonitor(
         displayId: displayId,
-        frame: frame,
-        visibleFrame: frame,
-        hasNotch: false,
-        name: name
+        name: name,
+        x: x,
+        y: y,
+        width: width,
+        height: height
     )
 }
 
@@ -468,16 +467,19 @@ private func makeTwoMonitorRefreshTestController() -> (
             WorkspaceConfiguration(name: "2", monitorAssignment: .secondary)
         ]
     )
-    let primaryMonitor = makeRefreshTestMonitor()
-    let secondaryMonitor = makeRefreshTestMonitor(displayId: 2, name: "Secondary", x: 1920)
+    let primaryMonitor = makeLayoutPlanPrimaryTestMonitor(name: "Primary")
+    let secondaryMonitor = makeLayoutPlanSecondaryTestMonitor(name: "Secondary", x: 1920)
     controller.workspaceManager.applyMonitorConfigurationChange([primaryMonitor, secondaryMonitor])
 
-    guard let primaryWorkspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: primaryMonitor.id)?.id,
+    guard let primaryWorkspaceId = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
           let secondaryWorkspaceId = controller.workspaceManager.workspaceId(for: "2", createIfMissing: false)
     else {
         fatalError("Failed to create two-monitor test fixture")
     }
 
+    guard controller.workspaceManager.setActiveWorkspace(primaryWorkspaceId, on: primaryMonitor.id) else {
+        fatalError("Failed to activate primary workspace on the primary monitor")
+    }
     _ = controller.workspaceManager.setActiveWorkspace(secondaryWorkspaceId, on: secondaryMonitor.id)
     _ = controller.workspaceManager.setInteractionMonitor(primaryMonitor.id)
 
@@ -704,6 +706,41 @@ private func prepareNiriState(
 
         #expect(controller.workspaceBarRefreshDebugState.requestCount == 0)
         #expect(statusBarController.statusButtonTitleForTests() == " 1 \u{2013} Second App")
+    }
+
+    @Test @MainActor func interactionMonitorChangeOnUnassignedThirdDisplayDoesNotRecurseAfterMonitorExpansion() {
+        let controller = makeRefreshTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "2", monitorAssignment: .secondary)
+            ]
+        )
+        let primary = makeRefreshTestMonitor(displayId: layoutPlanTestMainDisplayId(), name: "Primary", x: 0, y: 0)
+        let secondary = makeRefreshTestMonitor(displayId: layoutPlanTestSyntheticDisplayId(1), name: "Secondary", x: 1920, y: 0)
+        controller.workspaceManager.applyMonitorConfigurationChange([primary, secondary])
+        controller.settings.statusBarShowWorkspaceName = true
+
+        let statusBarController = makeRefreshTestStatusBarController(controller)
+        defer {
+            statusBarController.cleanup()
+            cleanupRefreshTestController(controller)
+        }
+        statusBarController.setup()
+
+        let third = makeRefreshTestMonitor(displayId: layoutPlanTestSyntheticDisplayId(2), name: "Third", x: 3840, y: 0)
+        controller.workspaceManager.applyMonitorConfigurationChange([primary, secondary, third])
+
+        var sessionChangeCount = 0
+        let originalOnSessionStateChanged = controller.workspaceManager.onSessionStateChanged
+        controller.workspaceManager.onSessionStateChanged = {
+            sessionChangeCount += 1
+            originalOnSessionStateChanged?()
+        }
+
+        #expect(controller.workspaceManager.setInteractionMonitor(third.id))
+        #expect(sessionChangeCount == 1)
+        #expect(statusBarController.statusButtonTitleForTests() == "")
+        #expect(statusBarController.statusButtonImagePositionForTests() == .imageOnly)
     }
 
     @Test @MainActor func niriConfigAndEnableUseRelayoutOnly() async {
@@ -2864,7 +2901,7 @@ private func prepareNiriState(
         #expect(recorder.relayoutEvents.isEmpty)
 
         recorder.fullRescanReasons.removeAll()
-        let otherMonitor = makeRefreshTestMonitor(displayId: 2, name: "Secondary", x: 1920)
+        let otherMonitor = makeLayoutPlanSecondaryTestMonitor(name: "Secondary", x: 1920)
         lifecycleManager.applyMonitorConfigurationChanged(
             currentMonitors: [otherMonitor],
             performPostUpdateActions: true

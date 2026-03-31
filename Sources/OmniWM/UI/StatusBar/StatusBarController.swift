@@ -12,17 +12,23 @@ final class StatusBarController: NSObject {
     private let defaults: UserDefaults
     private let hiddenBarController: HiddenBarController
     private let settings: SettingsStore
+    private let cliManager: AppCLIManager?
+    private let updateCoordinator: (any AppUpdateCoordinating)?
     private weak var controller: WMController?
 
     init(
         settings: SettingsStore,
         controller: WMController,
         hiddenBarController: HiddenBarController,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        cliManager: AppCLIManager? = nil,
+        updateCoordinator: (any AppUpdateCoordinating)? = nil
     ) {
         self.defaults = defaults
         self.hiddenBarController = hiddenBarController
         self.settings = settings
+        self.cliManager = cliManager
+        self.updateCoordinator = updateCoordinator
         self.controller = controller
         super.init()
     }
@@ -57,7 +63,14 @@ final class StatusBarController: NSObject {
 
         statusItem?.autosaveName = Self.mainAutosaveName
 
-        menuBuilder = StatusBarMenuBuilder(settings: settings, controller: controller)
+        let menuBuilder = StatusBarMenuBuilder(settings: settings, controller: controller)
+        menuBuilder.ipcMenuEnabled = cliManager != nil
+        menuBuilder.cliManager = cliManager
+        menuBuilder.updateCoordinator = updateCoordinator
+        menuBuilder.checkForUpdatesAction = { [weak self] in
+            self?.updateCoordinator?.checkForUpdatesManually()
+        }
+        self.menuBuilder = menuBuilder
         rebuildMenu()
 
         hiddenBarController.bind(

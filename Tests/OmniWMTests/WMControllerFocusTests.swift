@@ -29,21 +29,20 @@ private func makeFocusTestDefaults() -> UserDefaults {
 }
 
 private func makeFocusTestMonitor(
-    displayId: CGDirectDisplayID = 1,
+    displayId: CGDirectDisplayID = layoutPlanTestMainDisplayId(),
     name: String = "Main",
     x: CGFloat = 0,
     y: CGFloat = 0,
     width: CGFloat = 1920,
     height: CGFloat = 1080
 ) -> Monitor {
-    let frame = CGRect(x: x, y: y, width: width, height: height)
-    return Monitor(
-        id: Monitor.ID(displayId: displayId),
+    makeLayoutPlanTestMonitor(
         displayId: displayId,
-        frame: frame,
-        visibleFrame: frame,
-        hasNotch: false,
-        name: name
+        name: name,
+        x: x,
+        y: y,
+        width: width,
+        height: height
     )
 }
 
@@ -134,13 +133,14 @@ private func makeFocusTestController(
         WorkspaceConfiguration(name: "1", monitorAssignment: .main)
     ]
 ) -> (controller: WMController, workspaceId: WorkspaceDescriptor.ID, handle: WindowHandle) {
+    resetSharedControllerStateForTests()
     let settings = SettingsStore(defaults: makeFocusTestDefaults())
     settings.workspaceConfigurations = workspaceConfigurations
     let controller = WMController(settings: settings, windowFocusOperations: windowFocusOperations)
     let monitor = makeFocusTestMonitor()
     controller.workspaceManager.applyMonitorConfigurationChange([monitor])
 
-    guard let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id else {
+    guard let workspaceId = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false) else {
         fatalError("Expected a visible workspace for focus test setup")
     }
 
@@ -162,22 +162,26 @@ private func makeTwoMonitorFocusController(
     primaryWorkspaceId: WorkspaceDescriptor.ID,
     secondaryWorkspaceId: WorkspaceDescriptor.ID
 ) {
+    resetSharedControllerStateForTests()
     let settings = SettingsStore(defaults: makeFocusTestDefaults())
     settings.workspaceConfigurations = [
         WorkspaceConfiguration(name: "1", monitorAssignment: .main),
         WorkspaceConfiguration(name: "2", monitorAssignment: .secondary)
     ]
     let controller = WMController(settings: settings, windowFocusOperations: windowFocusOperations)
-    let primaryMonitor = makeFocusTestMonitor()
-    let secondaryMonitor = makeFocusTestMonitor(displayId: 2, name: "Secondary", x: 1920)
+    let primaryMonitor = makeLayoutPlanPrimaryTestMonitor(name: "Primary")
+    let secondaryMonitor = makeLayoutPlanSecondaryTestMonitor(name: "Secondary", x: 1920)
     controller.workspaceManager.applyMonitorConfigurationChange([primaryMonitor, secondaryMonitor])
 
-    guard let primaryWorkspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: primaryMonitor.id)?.id,
+    guard let primaryWorkspaceId = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
           let secondaryWorkspaceId = controller.workspaceManager.workspaceId(for: "2", createIfMissing: false)
     else {
         fatalError("Expected two-monitor focus test fixture")
     }
 
+    guard controller.workspaceManager.setActiveWorkspace(primaryWorkspaceId, on: primaryMonitor.id) else {
+        fatalError("Expected primary workspace to activate on the primary monitor")
+    }
     _ = controller.workspaceManager.setActiveWorkspace(secondaryWorkspaceId, on: secondaryMonitor.id)
     _ = controller.workspaceManager.setInteractionMonitor(primaryMonitor.id)
 

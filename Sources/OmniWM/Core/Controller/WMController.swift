@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OmniWMIPC
 
 @MainActor
 struct WindowFocusOperations {
@@ -116,6 +117,8 @@ final class WMController {
     private(set) var workspaceBarRefreshDebugState = WorkspaceBarRefreshDebugState()
     @ObservationIgnored
     var workspaceBarRefreshExecutionHookForTests: (() -> Void)?
+    @ObservationIgnored
+    weak var ipcApplicationBridge: IPCApplicationBridge?
 
     let animationClock = AnimationClock()
     private let windowFocusOperations: WindowFocusOperations
@@ -328,7 +331,7 @@ final class WMController {
     func requestWorkspaceBarRefresh() {
         workspaceBarRefreshDebugState.requestCount += 1
 
-        guard anyBarRefreshIsEnabled else { return }
+        guard hasWorkspaceBarRefreshConsumers else { return }
         guard pendingWorkspaceBarRefreshGeneration == nil else { return }
 
         let generation = workspaceBarRefreshGeneration
@@ -364,7 +367,7 @@ final class WMController {
 
     func activeStatusBarWorkspaceSummary() -> StatusBarWorkspaceSummary? {
         guard let monitor = monitorForInteraction(),
-              let workspace = workspaceManager.activeWorkspaceOrFirst(on: monitor.id)
+              let workspace = workspaceManager.currentActiveWorkspace(on: monitor.id)
         else {
             return nil
         }
@@ -543,6 +546,13 @@ final class WMController {
         workspaceBarRefreshIsEnabled || statusBarRefreshIsEnabled
     }
 
+    private var hasWorkspaceBarRefreshConsumers: Bool {
+        anyBarRefreshIsEnabled
+            || ipcApplicationBridge?.hasSubscribers(for: .workspaceBar) == true
+            || ipcApplicationBridge?.hasSubscribers(for: .windowsChanged) == true
+            || ipcApplicationBridge?.hasSubscribers(for: .layoutChanged) == true
+    }
+
     private func flushRequestedWorkspaceBarRefresh(expectedGeneration: UInt64) {
         guard pendingWorkspaceBarRefreshGeneration == expectedGeneration,
               workspaceBarRefreshGeneration == expectedGeneration
@@ -553,7 +563,7 @@ final class WMController {
         pendingWorkspaceBarRefreshGeneration = nil
         workspaceBarRefreshDebugState.isQueued = false
 
-        guard anyBarRefreshIsEnabled else { return }
+        guard hasWorkspaceBarRefreshConsumers else { return }
 
         workspaceBarRefreshDebugState.executionCount += 1
         workspaceBarRefreshExecutionHookForTests?()
@@ -562,6 +572,13 @@ final class WMController {
         }
         if statusBarRefreshIsEnabled {
             refreshStatusBar()
+        }
+        if let ipcApplicationBridge {
+            Task {
+                await ipcApplicationBridge.publishEvent(.workspaceBar)
+                await ipcApplicationBridge.publishEvent(.windowsChanged)
+                await ipcApplicationBridge.publishEvent(.layoutChanged)
+            }
         }
     }
 
@@ -694,9 +711,23 @@ final class WMController {
     }
 
     private func handleSessionStateChanged() {
-        focusNotificationDispatcher.notifyFocusChangesIfNeeded()
+        let changeSet = focusNotificationDispatcher.notifyFocusChangesIfNeeded()
         if statusBarRefreshIsEnabled {
             refreshStatusBar()
+        }
+        if let ipcApplicationBridge {
+            Task {
+                if changeSet.focusChanged {
+                    await ipcApplicationBridge.publishEvent(.focus)
+                }
+                if changeSet.workspaceChanged || changeSet.monitorChanged {
+                    await ipcApplicationBridge.publishEvent(.activeWorkspace)
+                }
+                if changeSet.monitorChanged {
+                    await ipcApplicationBridge.publishEvent(.focusedMonitor)
+                    await ipcApplicationBridge.publishEvent(.displayChanged)
+                }
+            }
         }
     }
 
@@ -890,10 +921,22 @@ final class WMController {
         )
     }
 
-    private func focusedManagedTokenForCommand() -> WindowToken? {
+    func focusedOrFrontmostWindowTokenForAutomation(
+        preferFrontmostWhenNonManagedFocusActive: Bool = false
+    ) -> WindowToken? {
         let focusedToken = workspaceManager.focusedToken
-        let frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        let token = focusedToken ?? frontmostPid.flatMap { axEventHandler.focusedWindowToken(for: $0) }
+        let frontmostPid = commandHandler.frontmostAppPidProvider?()
+            ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontmostToken = commandHandler.frontmostFocusedWindowTokenProvider?()
+            ?? frontmostPid.flatMap { axEventHandler.focusedWindowToken(for: $0) }
+        if preferFrontmostWhenNonManagedFocusActive, workspaceManager.isNonManagedFocusActive {
+            return frontmostToken ?? focusedToken
+        }
+        return focusedToken ?? frontmostToken
+    }
+
+    private func focusedManagedTokenForCommand() -> WindowToken? {
+        let token = focusedOrFrontmostWindowTokenForAutomation()
         guard let token, workspaceManager.entry(for: token) != nil else {
             return nil
         }
@@ -1280,9 +1323,7 @@ final class WMController {
     }
 
     func focusedWindowDecisionDebugSnapshot() -> WindowDecisionDebugSnapshot? {
-        let managedToken = workspaceManager.focusedToken
-        let frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        let token = managedToken ?? frontmostPid.flatMap { axEventHandler.focusedWindowToken(for: $0) }
+        let token = focusedOrFrontmostWindowTokenForAutomation()
         guard let token else { return nil }
         return windowDecisionDebugSnapshot(for: token)
     }
@@ -1306,19 +1347,25 @@ final class WMController {
     @discardableResult
     func reevaluateWindowRules(
         for targets: Set<WindowRuleReevaluationTarget>
-    ) async -> Bool {
-        guard !targets.isEmpty else { return false }
+    ) async -> WindowRuleReevaluationOutcome {
+        guard !targets.isEmpty else { return .none }
 
         var liveWindowsByToken: [WindowToken: AXWindowRef] = [:]
         var tokensToReevaluate: Set<WindowToken> = []
         var pidTargets: Set<pid_t> = []
+        var resolvedAnyTarget = false
 
         for target in targets {
             switch target {
             case let .window(token):
-                tokensToReevaluate.insert(token)
+                let existingEntry = workspaceManager.entry(for: token)
                 if let axRef = resolveAXWindowRef(for: token) {
+                    resolvedAnyTarget = true
+                    tokensToReevaluate.insert(token)
                     liveWindowsByToken[token] = axRef
+                } else if existingEntry != nil {
+                    resolvedAnyTarget = true
+                    tokensToReevaluate.insert(token)
                 }
             case let .pid(pid):
                 pidTargets.insert(pid)
@@ -1326,8 +1373,15 @@ final class WMController {
         }
 
         for pid in pidTargets {
+            let managedEntries = workspaceManager.entries(forPid: pid)
+            if !managedEntries.isEmpty {
+                resolvedAnyTarget = true
+            }
             if let app = NSRunningApplication(processIdentifier: pid) {
                 let windows = await axManager.windowsForApp(app)
+                if !windows.isEmpty {
+                    resolvedAnyTarget = true
+                }
                 for (axRef, _, windowId) in windows {
                     let token = WindowToken(pid: pid, windowId: windowId)
                     tokensToReevaluate.insert(token)
@@ -1335,12 +1389,21 @@ final class WMController {
                 }
             }
 
-            for entry in workspaceManager.entries(forPid: pid) {
+            for entry in managedEntries {
                 tokensToReevaluate.insert(entry.token)
             }
         }
 
+        guard !tokensToReevaluate.isEmpty else {
+            return WindowRuleReevaluationOutcome(
+                resolvedAnyTarget: resolvedAnyTarget,
+                evaluatedAnyWindow: false,
+                relayoutNeeded: false
+            )
+        }
+
         var relayoutNeeded = false
+        var evaluatedAnyWindow = false
         var affectedWorkspaceIds: Set<WorkspaceDescriptor.ID> = []
 
         for token in tokensToReevaluate.sorted(by: {
@@ -1353,6 +1416,7 @@ final class WMController {
             let axRef = liveWindowsByToken[token] ?? existingEntry?.axRef
             guard let axRef else { continue }
 
+            evaluatedAnyWindow = true
             let evaluation = evaluateWindowDisposition(axRef: axRef, pid: token.pid)
 
             guard let trackedMode = trackedModeForLifecycle(
@@ -1434,7 +1498,11 @@ final class WMController {
             )
         }
 
-        return relayoutNeeded
+        return WindowRuleReevaluationOutcome(
+            resolvedAnyTarget: resolvedAnyTarget,
+            evaluatedAnyWindow: evaluatedAnyWindow,
+            relayoutNeeded: relayoutNeeded
+        )
     }
 
     func toggleFocusedWindowFloating() {

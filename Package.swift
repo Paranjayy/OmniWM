@@ -1,5 +1,9 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
+
+let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let ghosttyMacOSLibraryDirectory = "\(packageDirectory)/Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64"
 
 let package = Package(
     name: "OmniWM",
@@ -10,6 +14,10 @@ let package = Package(
         .executable(
             name: "OmniWM",
             targets: ["OmniWMApp"]
+        ),
+        .executable(
+            name: "omniwmctl",
+            targets: ["OmniWMCtl"]
         )
     ],
     targets: [
@@ -18,8 +26,15 @@ let package = Package(
             path: "Frameworks/GhosttyKit.xcframework"
         ),
         .target(
+            name: "OmniWMIPC",
+            path: "Sources/OmniWMIPC",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
+        .target(
             name: "OmniWM",
-            dependencies: ["GhosttyKit"],
+            dependencies: ["GhosttyKit", "OmniWMIPC"],
             path: "Sources/OmniWM",
             resources: [
                 .process("Resources")
@@ -38,6 +53,7 @@ let package = Package(
                 .linkedFramework("QuartzCore"),
                 .linkedLibrary("z"),
                 .linkedLibrary("c++"),
+                .unsafeFlags(["-L\(ghosttyMacOSLibraryDirectory)"]),
                 .unsafeFlags(["-F/System/Library/PrivateFrameworks", "-framework", "SkyLight"])
             ]
         ),
@@ -49,9 +65,17 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         ),
+        .executableTarget(
+            name: "OmniWMCtl",
+            dependencies: ["OmniWMIPC"],
+            path: "Sources/OmniWMCtl",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
         .testTarget(
             name: "OmniWMTests",
-            dependencies: ["OmniWM"],
+            dependencies: ["OmniWM", "OmniWMIPC", "OmniWMCtl"],
             path: "Tests/OmniWMTests",
             swiftSettings: [
                 .swiftLanguageMode(.v6)

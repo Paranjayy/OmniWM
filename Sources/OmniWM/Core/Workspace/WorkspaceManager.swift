@@ -676,7 +676,17 @@ final class WorkspaceManager {
     func applySessionPatch(_ patch: WorkspaceSessionPatch) -> Bool {
         var changed = false
 
-        if let viewportState = patch.viewportState {
+        if var viewportState = patch.viewportState {
+            // Guard against a stale gesture snapshot overwriting an in-progress snap animation.
+            // Layout plans are built asynchronously and may arrive after endGesture() has already
+            // transitioned the viewport from .gesture to .spring. Preserve the spring animation.
+            if viewportState.viewOffsetPixels.isGesture {
+                let currentState = niriViewportState(for: patch.workspaceId)
+                if case .spring = currentState.viewOffsetPixels {
+                    viewportState.viewOffsetPixels = currentState.viewOffsetPixels
+                    viewportState.activeColumnIndex = currentState.activeColumnIndex
+                }
+            }
             updateNiriViewportState(viewportState, for: patch.workspaceId)
             changed = true
         }
@@ -2251,11 +2261,15 @@ final class WorkspaceManager {
 
     private func ensureVisibleWorkspaces(previousMonitors: [Monitor]? = nil, notify: Bool = true) {
         let currentMonitorIds = Set(monitors.map(\.id))
+        let expectedVisibleMonitorIds = expectedVisibleMonitorIds()
         let previousMonitorSessions = sessionState.monitorSessions
-        let mappingMonitorIds = Set(previousMonitorSessions.keys)
-        sessionState.monitorSessions = previousMonitorSessions.filter { currentMonitorIds.contains($0.key) }
+        sessionState.monitorSessions = previousMonitorSessions.filter {
+            currentMonitorIds.contains($0.key) && expectedVisibleMonitorIds.contains($0.key)
+        }
         invalidateWorkspaceProjectionCaches()
-        if currentMonitorIds != mappingMonitorIds {
+
+        let currentVisibleMonitorIds = Set(activeVisibleWorkspaceMap(from: sessionState.monitorSessions).keys)
+        if currentVisibleMonitorIds != expectedVisibleMonitorIds {
             rearrangeWorkspacesOnMonitors(
                 previousMonitors: previousMonitors,
                 previousMonitorSessions: previousMonitorSessions,
@@ -2351,6 +2365,12 @@ final class WorkspaceManager {
         let assigned = workspaces(on: monitorId)
         guard !assigned.isEmpty else { return nil }
         return assigned.first?.id
+    }
+
+    private func expectedVisibleMonitorIds() -> Set<Monitor.ID> {
+        Set(monitors.compactMap { monitor in
+            defaultVisibleWorkspaceId(on: monitor.id) == nil ? nil : monitor.id
+        })
     }
 
     private func replaceVisibleWorkspaceIfNeeded(on monitorId: Monitor.ID) {

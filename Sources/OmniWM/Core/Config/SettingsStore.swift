@@ -5,6 +5,8 @@ import Foundation
 final class SettingsStore {
     private let defaults: UserDefaults
 
+    var onIPCEnabledChanged: (@MainActor (Bool) -> Void)?
+
     var hotkeysEnabled: Bool {
         didSet { defaults.set(hotkeysEnabled, forKey: Keys.hotkeysEnabled) }
     }
@@ -226,6 +228,18 @@ final class SettingsStore {
 
     var preventSleepEnabled: Bool {
         didSet { defaults.set(preventSleepEnabled, forKey: Keys.preventSleepEnabled) }
+    }
+
+    var updateChecksEnabled: Bool {
+        didSet { defaults.set(updateChecksEnabled, forKey: Keys.updateChecksEnabled) }
+    }
+
+    var ipcEnabled: Bool {
+        didSet {
+            defaults.set(ipcEnabled, forKey: Keys.ipcEnabled)
+            guard oldValue != ipcEnabled else { return }
+            onIPCEnabledChanged?(ipcEnabled)
+        }
     }
 
     var scrollGestureEnabled: Bool {
@@ -455,6 +469,8 @@ final class SettingsStore {
         workspaceBackJumpEnabled = defaults.object(forKey: Keys.workspaceBackJumpEnabled) as? Bool ??
             baseline.workspaceBackJumpEnabled
         preventSleepEnabled = defaults.object(forKey: Keys.preventSleepEnabled) as? Bool ?? baseline.preventSleepEnabled
+        updateChecksEnabled = defaults.object(forKey: Keys.updateChecksEnabled) as? Bool ?? baseline.updateChecksEnabled
+        ipcEnabled = defaults.object(forKey: Keys.ipcEnabled) as? Bool ?? baseline.ipcEnabled
         scrollGestureEnabled = defaults.object(forKey: Keys.scrollGestureEnabled) as? Bool ??
             baseline.scrollGestureEnabled
         scrollSensitivity = defaults.object(forKey: Keys.scrollSensitivity) as? Double ?? baseline.scrollSensitivity
@@ -959,6 +975,8 @@ private enum Keys {
     static let monitorOrientationSettings = "settings.monitorOrientationSettings"
     static let workspaceBackJumpEnabled = "settings.workspace.backJumpEnabled"
     static let preventSleepEnabled = "settings.preventSleepEnabled"
+    static let updateChecksEnabled = "settings.updateChecksEnabled"
+    static let ipcEnabled = "settings.ipcEnabled"
     static let scrollGestureEnabled = "settings.scrollGestureEnabled"
     static let scrollSensitivity = "settings.scrollSensitivity"
     static let scrollModifierKey = "settings.scrollModifierKey"
