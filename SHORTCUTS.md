@@ -60,10 +60,6 @@
 | `ROpt + U` | Switch to **previous** workspace | `Ctrl+Opt+U` |
 | `ROpt + I` | Switch to **next** workspace | `Ctrl+Opt+I` |
 | `ROpt + Space` | Open **Raycast** | `Opt+Space` |
-| `ROpt + Brightness ↑` | Fine-tune brightness (+1/16th) | `Opt+Shift+Brightness↑` |
-| `ROpt + Brightness ↓` | Fine-tune brightness (−1/16th) | `Opt+Shift+Brightness↓` |
-| `ROpt + Volume ↑` | Fine-tune volume (+1/16th) | `Opt+Shift+Volume↑` |
-| `ROpt + Volume ↓` | Fine-tune volume (−1/16th) | `Opt+Shift+Volume↓` |
 
 ---
 
