@@ -32,6 +32,12 @@
 | `RCmd + R` | Raise all floating windows | `Ctrl+Cmd+R` |
 | `RCmd + Space` | Open command palette | `Ctrl+Cmd+Space` |
 | `RCmd + Tab` | Workspace back and forth | `Ctrl+Cmd+Tab` |
+| `RCmd + B` | Toggle workspace bar | `Ctrl+Cmd+B` |
+| `RCmd + M` | Focus next monitor | `Ctrl+Cmd+M` |
+| `RCmd + N` | Cycle column width → forward (1/3→1/2→2/3) | `Ctrl+Cmd+N` |
+| `RCmd + P` | Cycle column width ← backward (2/3→1/2→1/3) | `Ctrl+Cmd+P` |
+| `RCmd + Z` | Toggle column full-width | `Ctrl+Cmd+Z` |
+| `RCmd + E` | Balance / equalize all column sizes | `Ctrl+Cmd+E` |
 
 ---
 
@@ -50,6 +56,9 @@
 | `ROpt + 1–9` | Focus column/window by index in bar | `Ctrl+Opt+1–9` |
 | `ROpt + Tab` | Focus previous window | `Ctrl+Opt+Tab` |
 | `ROpt + Q` | Toggle Quake terminal | `Ctrl+Opt+\`` |
+| `ROpt + T` | Toggle column tabbed mode | `Ctrl+Opt+T` |
+| `ROpt + U` | Switch to **previous** workspace | `Ctrl+Opt+U` |
+| `ROpt + I` | Switch to **next** workspace | `Ctrl+Opt+I` |
 | `ROpt + Space` | Open **Raycast** | `Opt+Space` |
 | `ROpt + Brightness ↑` | Fine-tune brightness (+1/16th) | `Opt+Shift+Brightness↑` |
 | `ROpt + Brightness ↓` | Fine-tune brightness (−1/16th) | `Opt+Shift+Brightness↓` |
