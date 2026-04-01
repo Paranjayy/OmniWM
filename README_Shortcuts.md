@@ -1,4 +1,4 @@
-# OmniWM Shortcuts Guide (v35 God Build)
+# OmniWM Shortcuts Guide (v36 God Build)
 
 Your keyboard is now a high-performance orchestration tool using **BTT-Style Native Modifiers**.
 
@@ -14,12 +14,25 @@ Your keyboard is now a high-performance orchestration tool using **BTT-Style Nat
 | Key Combo | Action | OmniWM Command |
 | :--- | :--- | :--- |
 | **`RCmd + Space`** | **Command Palette** | `Ctrl + Cmd + Space` (Spotlight Bypass) |
+| **`RCmd + O`** | **Workspace Overview** | `Ctrl + Cmd + Shift + O` (Restored!) |
 | **`RCmd + R`** | **Raise All Floating** | `Ctrl + Cmd + R` |
 | **`RCmd + G`** | **Toggle Focused Float** | `Ctrl + Cmd + G` |
 | **`RCmd + B`** | **Toggle Workspace Bar** | `Ctrl + Cmd + B` |
 | **`RCmd + Enter / F`** | **Toggle Fullscreen** | `Ctrl + Cmd + F` |
-| **`RCmd + Q`** | **Quake Terminal** | `Ctrl + Opt + Grave` |
+| **`RCmd + Q / Grave`** | **Quake Terminal** | `Ctrl + Opt + Grave` |
 | **`RCmd + Z`** | **ZEN MODE** | Integrated (Hide Others + Bar Toggle) |
+| **`RCmd + M`** | **Next Monitor** | `Ctrl + Cmd + M` (Restored!) |
+
+---
+
+## 💡 New Productivity & "Flow" Tools
+
+| Key Combo | Action | Native / App Command |
+| :--- | :--- | :--- |
+| **`RCmd + E`** | **Arc Little Arc** | `Opt + Cmd + N` (Floating Lookup) |
+| **`RCmd + N`** | **Raycast Quick-Note** | `Shift + Ctrl + Cmd + N` |
+| **`RCmd + T`** | **FLOW MODE** | Start Pomodoro + Zen Mode |
+| **`RCmd + Tab`** | **Window Cycler** | `Option + Tab` (AltTab Standard) |
 
 ---
 
@@ -44,18 +57,21 @@ Your keyboard is now a high-performance orchestration tool using **BTT-Style Nat
 
 ---
 
-## 🧭 Browser-Savvy Logic (Arc)
+## 🧭 Text & System Logic
 
-When in **Arc Browser**, `RCmd + Shift + WASD` magically adapts:
-*   **A / D**: Switch Spaces (Cmd + Opt + Left / Right).
-*   **W / S**: Switch Tabs (Cmd + Opt + Up / Down).
+| Key Combo | Action | Mapping |
+| :--- | :--- | :--- |
+| **`ROpt + Backspace`** | **Delete Word** | `Option + Backspace` |
+| **`RCmd + Backspace`** | **Delete Line** | `Command + Backspace` |
+| **`ROpt + Arrows`** | **Word Jump** | `Option + Arrows` |
+| **`RCmd + Arrows`** | **Line Start/End** | `Command + Arrows` |
 
 ---
 
 ## 🔊 Audio & Fine-Tuning
-*   **Option + Shift + Volume/Brightness**: Native 1/16th fine-tune adjustment.
-*   **RCmd (Tap alone)**: "Glass" sound confirm.
-*   **ROpt (Tap alone)**: "Blow" sound confirm.
+*   **ROpt + Shift + Volume/Brightness**: Native 1/16th fine-tune adjustment.
+*   **RCmd / ROpt (Hold)**: **WORKSPACE BAR SHOWS**.
+*   **RCmd / ROpt (Release)**: **BAR HIDES AFTER 5S**.
 
 ---
 

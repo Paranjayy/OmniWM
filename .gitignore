@@ -1,37 +1,18 @@
-# Build artifacts
-.build/
+# OmniWM Master Gitignore
 
-# SwiftPM
-.swiftpm/xcode/xcuserdata/
-.swiftpm/xcode/package.xcworkspace/xcuserdata/
-
-# Xcode
-*.xcworkspace/xcuserdata/
-DerivedData/
-*.xcodeproj/xcuserdata/
-*.xcuserstate
-
-# macOS
+# Binary Databases (The stalling culprits)
+*.mdb
+*.lock
+*.db
 .DS_Store
-.AppleDouble
-.LSOverride
 
-# Editor
-*.swp
-*.swo
-*~
+# Large build/dependency folders
+.build/
+.swiftpm/
+node_modules/
 
-# Build output
-dist/
-
-# External frameworks (downloaded/built separately)
-Frameworks/
-
-# Codex
-.codex-home/
-.tmp/
-.cache/
-.codex-cache/
-
-# Local documentation
-STABILITY_IMPROVEMENTS.md
+# Only keep the heart of the configs
+!*/
+!.config/karabiner.json
+!.config/omniwm/settings.json
+!.config/zed/settings.json
