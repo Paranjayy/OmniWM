@@ -51,10 +51,10 @@
 | `ROpt + Tab` | Focus previous window | `Ctrl+Opt+Tab` |
 | `ROpt + Q` | Toggle Quake terminal | `Ctrl+Opt+\`` |
 | `ROpt + Space` | Open **Raycast** | `Opt+Space` |
-| `ROpt + Brightness ↑` | Fine-tune brightness (+1/16th) | `Opt+Shift+Brightness↑` |
-| `ROpt + Brightness ↓` | Fine-tune brightness (−1/16th) | `Opt+Shift+Brightness↓` |
-| `ROpt + Volume ↑` | Fine-tune volume (+1/16th) | `Opt+Shift+Volume↑` |
-| `ROpt + Volume ↓` | Fine-tune volume (−1/16th) | `Opt+Shift+Volume↓` |
+| `ROpt + Brightness ↑/↓` | Regular brightness step | `Brightness ↑/↓` |
+| `ROpt + Shift + Brightness ↑/↓` | Fine-tune brightness (+1/16th) | `Opt+Shift+Brightness ↑/↓` |
+| `ROpt + Volume ↑/↓` | Regular volume step | `Volume ↑/↓` |
+| `ROpt + Shift + Volume ↑/↓` | Fine-tune volume (+1/16th) | `Opt+Shift+Volume ↑/↓` |
 
 ---
 
