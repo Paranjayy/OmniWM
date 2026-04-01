@@ -30,7 +30,7 @@
                         ]
                     },
                     {
-                        "description": "[Universal] ARROWS (Nav): ROpt=Word, RCmd=Line (Select with Shift)",
+                        "description": "[Universal] ARROWS: ROpt=Word, RCmd=Line (Select with Shift)",
                         "manipulators": [
                             { "type": "basic", "from": { "key_code": "left_arrow",  "modifiers": { "mandatory": ["shift"] } }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "right_arrow", "modifiers": { "mandatory": ["shift"] } }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
@@ -51,12 +51,23 @@
                         ]
                     },
                     {
-                        "description": "[MEDIA] Brightness/Volume Fine-tune (Opt+Shift+Key)",
+                        "description": "[Universal] BACKSPACE: ROpt=WordDelete, RCmd=LineDelete",
+                        "manipulators": [
+                            { "type": "basic", "from": { "key_code": "delete_or_backspace" }, "to": [{ "key_code": "delete_or_backspace", "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "delete_or_backspace" }, "to": [{ "key_code": "delete_or_backspace", "modifiers": ["left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                        ]
+                    },
+                    {
+                        "description": "[MEDIA] Brightness/Volume Fine-tune",
                         "manipulators": [
                             { "type": "basic", "from": { "consumer_key_code": "display_brightness_increment", "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "display_brightness_increment", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "consumer_key_code": "display_brightness_decrement", "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "display_brightness_decrement", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "consumer_key_code": "volume_increment",             "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "volume_increment",             "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "consumer_key_code": "volume_decrement",             "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "volume_decrement",             "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] }
+                            { "type": "basic", "from": { "consumer_key_code": "volume_decrement",             "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "volume_decrement",             "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "apple_vendor_top_case_key_code": "brightness_up",   "modifiers": { "optional": ["any"] } }, "to": [{ "apple_vendor_top_case_key_code": "brightness_up",   "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "apple_vendor_top_case_key_code": "brightness_down", "modifiers": { "optional": ["any"] } }, "to": [{ "apple_vendor_top_case_key_code": "brightness_down", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "apple_vendor_keyboard_key_code": "volume_up",       "modifiers": { "optional": ["any"] } }, "to": [{ "apple_vendor_keyboard_key_code": "volume_up",       "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "apple_vendor_keyboard_key_code": "volume_down",     "modifiers": { "optional": ["any"] } }, "to": [{ "apple_vendor_keyboard_key_code": "volume_down",     "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "right_opt_layer", "value": 1 }] }
                         ]
                     },
                     {
