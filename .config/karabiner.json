@@ -5,38 +5,26 @@
                 "rules": [
 
                     {
-                        "description": "OmniWM: [ROpt] Brightness fine-tune - MUST be first rule",
+                        "description": "OmniWM: [ROpt] Brightness + Volume fine-tune (consumer_key_code, first priority)",
                         "manipulators": [
-                            {
-                                "type": "basic",
-                                "from": { "consumer_key_code": "display_brightness_increment", "modifiers": { "optional": ["any"] } },
-                                "to": [{ "consumer_key_code": "display_brightness_increment", "modifiers": ["left_shift"] }],
-                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
-                            },
-                            {
-                                "type": "basic",
-                                "from": { "consumer_key_code": "display_brightness_decrement", "modifiers": { "optional": ["any"] } },
-                                "to": [{ "consumer_key_code": "display_brightness_decrement", "modifiers": ["left_shift"] }],
-                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
-                            }
+                            { "type": "basic", "from": { "consumer_key_code": "display_brightness_increment", "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "display_brightness_increment", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "consumer_key_code": "display_brightness_decrement", "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "display_brightness_decrement", "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "consumer_key_code": "volume_increment",             "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "volume_increment",             "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "consumer_key_code": "volume_decrement",             "modifiers": { "optional": ["any"] } }, "to": [{ "consumer_key_code": "volume_decrement",             "modifiers": ["left_option", "left_shift"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] }
                         ]
                     },
 
                     {
-                        "description": "OmniWM: [ROpt] Volume fine-tune - MUST be first rule",
+                        "description": "Text Nav: [ROpt+Arrow] = Opt+Arrow (word), [RCmd+Arrow] = Cmd+Arrow (line) — in browsers/editors",
                         "manipulators": [
-                            {
-                                "type": "basic",
-                                "from": { "consumer_key_code": "volume_increment", "modifiers": { "optional": ["any"] } },
-                                "to": [{ "consumer_key_code": "volume_increment", "modifiers": ["left_shift"] }],
-                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
-                            },
-                            {
-                                "type": "basic",
-                                "from": { "consumer_key_code": "volume_decrement", "modifiers": { "optional": ["any"] } },
-                                "to": [{ "consumer_key_code": "volume_decrement", "modifiers": ["left_shift"] }],
-                                "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }]
-                            }
+                            { "type": "basic", "from": { "key_code": "left_arrow"  }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "right_arrow" }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "up_arrow"   }, "to": [{ "key_code": "up_arrow",   "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "down_arrow" }, "to": [{ "key_code": "down_arrow", "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "left_arrow"  }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "right_arrow" }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "up_arrow"   }, "to": [{ "key_code": "up_arrow",   "modifiers": ["left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] },
+                            { "type": "basic", "from": { "key_code": "down_arrow" }, "to": [{ "key_code": "down_arrow", "modifiers": ["left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }, { "type": "frontmost_application_if", "bundle_identifiers": ["app\\.zen-browser\\.zen", "com\\.google\\.Chrome", "com\\.apple\\.Safari", "org\\.mozilla\\.firefox", "com\\.mitchellh\\.ghostty", "dev\\.zed\\.Zed", "com\\.apple\\.Terminal", "com\\.microsoft\\.VSCode", "com\\.jetbrains\\..*", "company\\.thebrowser\\.dia"] }] }
                         ]
                     },
 
@@ -47,7 +35,7 @@
                             "from": { "key_code": "right_option", "modifiers": { "optional": ["any"] } },
                             "to": [
                                 { "set_variable": { "name": "ropt_layer", "value": 1 } },
-                                { "key_code": "left_option" }
+                                { "key_code": "vk_none" }
                             ],
                             "to_after_key_up": [{ "set_variable": { "name": "ropt_layer", "value": 0 } }],
                             "to_if_alone": [{ "key_code": "right_option" }],
@@ -100,21 +88,26 @@
                         ]
                     },
 
-
                     {
-                        "description": "OmniWM: [RCmd] WASD=MoveInBar | F/Enter=Fullscreen | O=Overview | G=Float | R=Raise | Space=Palette | Tab=BackForth",
+                        "description": "OmniWM: [RCmd] WASD=MoveInBar | F/Enter=Fullscreen | O=Overview | G=Float | R=Raise | Space=Palette | Tab=BackForth | B=ToggleBar | M=Monitor | N/P=CycleWidth | Z=FullWidth | E=Balance",
                         "manipulators": [
                             { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "s" }, "to": [{ "key_code": "down_arrow",  "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "d" }, "to": [{ "key_code": "right_arrow", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "f" },               "to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "return_or_enter" }, "to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "o" },               "to": [{ "key_code": "o",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "g" },               "to": [{ "key_code": "g",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "r" },               "to": [{ "key_code": "r",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "spacebar" },        "to": [{ "key_code": "spacebar", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "tab" },             "to": [{ "key_code": "tab",      "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
+                            { "type": "basic", "from": { "key_code": "f" },              "to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "return_or_enter" },"to": [{ "key_code": "f",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "o" },              "to": [{ "key_code": "o",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "g" },              "to": [{ "key_code": "g",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "r" },              "to": [{ "key_code": "r",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "spacebar" },       "to": [{ "key_code": "spacebar", "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "tab" },            "to": [{ "key_code": "tab",      "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "b" },              "to": [{ "key_code": "b",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "m" },              "to": [{ "key_code": "m",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "n" },              "to": [{ "key_code": "n",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "p" },              "to": [{ "key_code": "p",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "z" },              "to": [{ "key_code": "z",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "e" },              "to": [{ "key_code": "e",        "modifiers": ["left_control", "left_command"] }], "conditions": [{ "type": "variable_if", "name": "rcmd_layer", "value": 1 }] }
                         ]
                     },
 
@@ -129,7 +122,7 @@
                     },
 
                     {
-                        "description": "OmniWM: [ROpt] WASD=Focus | 1-9=FocusCol | Space=Raycast | Tab=FocusPrev | Q=Quake",
+                        "description": "OmniWM: [ROpt] WASD=Focus | 1-9=FocusCol | Space=Raycast | Tab=FocusPrev | Q=Quake | T=Tabbed | U=PrevWS | I=NextWS",
                         "manipulators": [
                             { "type": "basic", "from": { "key_code": "w" }, "to": [{ "key_code": "up_arrow",    "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "a" }, "to": [{ "key_code": "left_arrow",  "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
@@ -146,7 +139,10 @@
                             { "type": "basic", "from": { "key_code": "9" }, "to": [{ "key_code": "9", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "spacebar" }, "to": [{ "key_code": "spacebar", "modifiers": ["left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
                             { "type": "basic", "from": { "key_code": "tab" },      "to": [{ "key_code": "tab",      "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
-                            { "type": "basic", "from": { "key_code": "q" },        "to": [{ "key_code": "grave_accent_and_tilde", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] }
+                            { "type": "basic", "from": { "key_code": "q" },        "to": [{ "key_code": "grave_accent_and_tilde", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "t" },        "to": [{ "key_code": "t", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "u" },        "to": [{ "key_code": "u", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] },
+                            { "type": "basic", "from": { "key_code": "i" },        "to": [{ "key_code": "i", "modifiers": ["left_control", "left_option"] }], "conditions": [{ "type": "variable_if", "name": "ropt_layer", "value": 1 }] }
                         ]
                     }
 
