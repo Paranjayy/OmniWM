@@ -69,6 +69,7 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case testHaptic
     case captureWorkspaceSnapshot
     case openWarpSwitcher
+    case centerFocusedFloatAtSize
 
     var displayName: String {
         switch self {
@@ -126,6 +127,7 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
         case .testHaptic: "Test Haptic Feedback"
         case .captureWorkspaceSnapshot: "Capture Workspace Layout Snapshot"
         case .openWarpSwitcher: "Open Warp Switcher"
+        case .centerFocusedFloatAtSize: "Center Focused Float (1194x947)"
         }
     }
 
@@ -156,7 +158,7 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
              .toggleWorkspaceBarVisibility, .toggleHiddenBar, .toggleQuakeTerminal,
              .toggleWorkspaceLayout, .toggleOverview,
              .trashFocusedWindow, .popLastTrashedWindow, .testHaptic,
-             .captureWorkspaceSnapshot, .openWarpSwitcher:
+             .captureWorkspaceSnapshot, .openWarpSwitcher, .centerFocusedFloatAtSize:
             .shared
         }
     }

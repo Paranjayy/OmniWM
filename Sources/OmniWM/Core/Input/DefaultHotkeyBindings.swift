@@ -338,7 +338,8 @@ enum DefaultHotkeyBindings {
             HotkeyBinding(id: "popLastTrashedWindow", command: .popLastTrashedWindow, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_P), modifiers: godLayer)),
             HotkeyBinding(id: "testHaptic", command: .testHaptic, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_H), modifiers: godLayer)),
             HotkeyBinding(id: "captureWorkspaceSnapshot", command: .captureWorkspaceSnapshot, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: godLayer)),
-            HotkeyBinding(id: "openWarpSwitcher", command: .openWarpSwitcher, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: godLayer))
+            HotkeyBinding(id: "openWarpSwitcher", command: .openWarpSwitcher, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: godLayer)),
+            HotkeyBinding(id: "centerFocusedFloatAtSize", command: .centerFocusedFloatAtSize, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Y), modifiers: UInt32(cmdKey)))
         ])
 
         return bindings

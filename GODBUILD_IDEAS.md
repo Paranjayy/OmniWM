@@ -1,3 +1,4 @@
+better touch tool config - '/Users/paranjay/Library/Application Support/BetterTouchTool' 
 # OmniWM God Build — Ideas & Future Roadmap
 > Last updated: 2026-04-04. Exams mode — resume after 🎓
 > **30+ ideas across 6 tiers. Start with Tier 1.**
@@ -156,3 +157,4 @@
 - [x] God Build sidebar & profile callouts.
 - [x] Custom build script & settings patcher.
 - [x] Root cleaned & configs synced.
+- [x] Cmd+Y: Instant Float + 1194x947pt resize + Center shortcut.

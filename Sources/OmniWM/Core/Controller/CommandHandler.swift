@@ -178,6 +178,46 @@ final class CommandHandler {
             if ExperimentFlags.shared.isGodBuildActive && controller.settings.warpSwitcherEnabled {
                 controller.openWarpSwitcher()
             }
+        case .centerFocusedFloatAtSize:
+            guard let controller,
+                  let token = controller.focusedWindowToken(),
+                  let entry = controller.workspaceManager.entry(for: token) else { return .executed }
+
+            guard ExperimentFlags.shared.isGodBuildActive else { return .executed }
+
+            if entry.mode != .floating {
+                controller.toggleFocusedWindowFloating()
+            }
+
+            let targetWidth: CGFloat = 1194
+            let targetHeight: CGFloat = 947
+
+            if let monitor = controller.monitorForInteraction() {
+                let screenVisibleFrame = monitor.visibleFrame
+                let centerX = screenVisibleFrame.origin.x + (screenVisibleFrame.width - targetWidth) / 2
+                let centerY = screenVisibleFrame.origin.y + (screenVisibleFrame.height - targetHeight) / 2
+                
+                let targetFrame = CGRect(x: centerX, y: centerY, width: targetWidth, height: targetHeight)
+                
+                var point = targetFrame.origin
+                var size = targetFrame.size
+                
+                let pointValue = AXValueCreate(.cgPoint, &point)
+                let sizeValue = AXValueCreate(.cgSize, &size)
+                
+                if let pointValue, let sizeValue {
+                    AXUIElementSetAttributeValue(entry.axRef, kAXPositionAttribute as CFString, pointValue)
+                    AXUIElementSetAttributeValue(entry.axRef, kAXSizeAttribute as CFString, sizeValue)
+                    
+                    HapticManager.shared.trigger(.alignment)
+                    HUDController.shared.showNotification(
+                        title: "GOD BUILD ACTION",
+                        icon: "rectangle.center.inset.filled",
+                        message: "Centered at \(Int(targetWidth))x\(Int(targetHeight))",
+                        highlightColor: .purple
+                    )
+                }
+            }
         }
 
         return .executed
