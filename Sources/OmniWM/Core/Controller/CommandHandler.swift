@@ -183,8 +183,6 @@ final class CommandHandler {
                   let token = controller.focusedWindowToken(),
                   let entry = controller.workspaceManager.entry(for: token) else { return .executed }
 
-            guard ExperimentFlags.shared.isGodBuildActive else { return .executed }
-
             if entry.mode != .floating {
                 controller.toggleFocusedWindowFloating()
             }
@@ -209,12 +207,13 @@ final class CommandHandler {
                     AXUIElementSetAttributeValue(entry.axRef, kAXPositionAttribute as CFString, pointValue)
                     AXUIElementSetAttributeValue(entry.axRef, kAXSizeAttribute as CFString, sizeValue)
                     
+                    let isGod = ExperimentFlags.shared.isGodBuildActive
                     HapticManager.shared.trigger(.alignment)
                     HUDController.shared.showNotification(
-                        title: "GOD BUILD ACTION",
+                        title: isGod ? "GOD BUILD ACTION" : "ACTION",
                         icon: "rectangle.center.inset.filled",
                         message: "Centered at \(Int(targetWidth))x\(Int(targetHeight))",
-                        highlightColor: .purple
+                        highlightColor: isGod ? .purple : .blue
                     )
                 }
             }
