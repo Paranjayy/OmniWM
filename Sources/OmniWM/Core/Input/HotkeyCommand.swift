@@ -64,6 +64,11 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case toggleQuakeTerminal
     case toggleWorkspaceLayout
     case toggleOverview
+    case trashFocusedWindow
+    case popLastTrashedWindow
+    case testHaptic
+    case captureWorkspaceSnapshot
+    case openWarpSwitcher
 
     var displayName: String {
         switch self {
@@ -116,6 +121,11 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
         case .toggleQuakeTerminal: "Toggle Quake Terminal"
         case .toggleWorkspaceLayout: "Toggle Workspace Layout"
         case .toggleOverview: "Toggle Overview"
+        case .trashFocusedWindow: "Trash Focused Window"
+        case .popLastTrashedWindow: "Pop Last Trashed Window"
+        case .testHaptic: "Test Haptic Feedback"
+        case .captureWorkspaceSnapshot: "Capture Workspace Layout Snapshot"
+        case .openWarpSwitcher: "Open Warp Switcher"
         }
     }
 
@@ -144,7 +154,9 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
              .assignFocusedWindowToScratchpad, .toggleScratchpadWindow,
              .openMenuAnywhere,
              .toggleWorkspaceBarVisibility, .toggleHiddenBar, .toggleQuakeTerminal,
-             .toggleWorkspaceLayout, .toggleOverview:
+             .toggleWorkspaceLayout, .toggleOverview,
+             .trashFocusedWindow, .popLastTrashedWindow, .testHaptic,
+             .captureWorkspaceSnapshot, .openWarpSwitcher:
             .shared
         }
     }

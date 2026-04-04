@@ -4,6 +4,15 @@ import Foundation
 enum HideSide {
     case left
     case right
+    case top
+    case bottom
+}
+
+enum HideReason: Equatable {
+    case layoutTransient
+    case scratchpad
+    case trash
+    case workspaceInactive
 }
 
 enum AxisHideEdge {
@@ -12,9 +21,9 @@ enum AxisHideEdge {
 
     init(encodedHideSide: HideSide) {
         switch encodedHideSide {
-        case .left:
+        case .left, .top:
             self = .minimum
-        case .right:
+        case .right, .bottom:
             self = .maximum
         }
     }
@@ -91,6 +100,16 @@ enum HiddenWindowPlacementResolver {
                 CGPoint(
                     x: monitor.visibleFrame.maxX - reveal,
                     y: targetY
+                )
+            case .top:
+                CGPoint(
+                    x: monitor.visibleFrame.midX - size.width / 2, // Center horizontally for top/bottom
+                    y: monitor.visibleFrame.minY - size.height + reveal
+                )
+            case .bottom:
+                CGPoint(
+                    x: monitor.visibleFrame.midX - size.width / 2,
+                    y: monitor.visibleFrame.maxY - reveal
                 )
             }
         }

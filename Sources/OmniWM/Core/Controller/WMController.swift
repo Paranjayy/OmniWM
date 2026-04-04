@@ -79,8 +79,8 @@ final class WMController {
     private var hiddenWorkspaceBarMonitorIds: Set<Monitor.ID> = []
     @ObservationIgnored
     private let hiddenBarController: HiddenBarController
-    @ObservationIgnored
-    private lazy var quakeTerminalController: QuakeTerminalController = .init(settings: settings)
+//    @ObservationIgnored
+//    private lazy var quakeTerminalController: QuakeTerminalController = .init(settings: settings)
 
     var isTransferringWindow: Bool = false
     var hiddenAppPIDs: Set<pid_t> = []
@@ -312,20 +312,15 @@ final class WMController {
     }
 
     func setQuakeTerminalEnabled(_ enabled: Bool) {
-        if enabled {
-            quakeTerminalController.setup()
-        } else {
-            quakeTerminalController.cleanup()
-        }
+        // quakeTerminalController.setup()
     }
 
     func toggleQuakeTerminal() {
-        guard settings.quakeTerminalEnabled else { return }
-        quakeTerminalController.toggle()
+        // quakeTerminalController.toggle()
     }
 
     func reloadQuakeTerminalOpacity() {
-        quakeTerminalController.reloadOpacityConfig()
+        // quakeTerminalController.reloadOpacityConfig()
     }
 
     func requestWorkspaceBarRefresh() {
@@ -1567,6 +1562,51 @@ final class WMController {
         }
     }
 
+    func trashFocusedWindow() {
+        guard let token = focusedManagedTokenForCommand(),
+              let entry = workspaceManager.entry(for: token),
+              let monitor = monitorForInteraction() ?? workspaceManager.monitor(for: entry.workspaceId)
+        else {
+            return
+        }
+
+        TrashStackManager.shared.push(token)
+
+        layoutRefreshController.hideWindow(
+            entry,
+            monitor: monitor,
+            side: .bottom,
+            reason: .trash
+        )
+
+        recoverFocusAfterScratchpadHide(
+            in: entry.workspaceId,
+            excluding: token,
+            on: monitor.id
+        )
+
+        if entry.mode == .tiling {
+            layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+        }
+    }
+
+    func popLastTrashedWindow() {
+        guard let token = TrashStackManager.shared.pop(),
+              let entry = workspaceManager.entry(for: token),
+              let monitor = monitorForInteraction() ?? workspaceManager.monitor(for: entry.workspaceId)
+        else {
+            return
+        }
+
+        let currentWorkspaceId = activeWorkspace()?.id ?? entry.workspaceId
+        if entry.workspaceId != currentWorkspaceId {
+            reassignManagedWindow(token, to: currentWorkspaceId)
+        }
+
+        layoutRefreshController.unhideTrashWindow(entry, monitor: monitor)
+        focusWindow(token)
+    }
+
     private func applyManagedWindowOverride(
         _ override: ManualWindowOverride?,
         for token: WindowToken,
@@ -1791,17 +1831,31 @@ final class WMController {
 }
 
 extension WMController {
+    func openWarpSwitcher() {
+        SwitcherController.shared.show(using: self)
+    }
+
+    /// Returns the number of windows currently in a workspace.
+    func workspaceWindowCount(for workspaceId: WorkspaceDescriptor.ID) -> Int {
+        workspaceManager.entries(in: workspaceId).count
+    }
+}
+
+
+extension WMController {
     func isFrontmostAppLockScreen() -> Bool {
         lockScreenObserver.isFrontmostAppLockScreen()
     }
 
     func isPointInQuakeTerminal(_ point: CGPoint) -> Bool {
-        guard settings.quakeTerminalEnabled,
-              quakeTerminalController.visible,
-              let window = quakeTerminalController.window else {
-            return false
-        }
-        return window.frame.contains(point)
+        // Neutralized for God Build without Ghostty
+        return false
+//        guard settings.quakeTerminalEnabled,
+//              quakeTerminalController.visible,
+//              let window = quakeTerminalController.window else {
+//            return false
+//        }
+//        return window.frame.contains(point)
     }
 
     func isPointInOwnWindow(_ point: CGPoint) -> Bool {

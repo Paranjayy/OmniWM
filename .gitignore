@@ -6,13 +6,19 @@
 *.db
 .DS_Store
 
+
 # Large build/dependency folders
 .build/
 .swiftpm/
 node_modules/
+.idea/
 
-# Only keep the heart of the configs
-!*/
-!.config/karabiner.json
-!.config/omniwm/settings.json
-!.config/zed/settings.json
+# Binaries/Caches
+*.o
+*.a
+*.dylib
+*.framework
+
+# Only keep the heart of the configs if we are in homedir (but this is a project repo)
+# If this is the omniwm repo, we don't want to exclude everything!
+# If you want to only track specific config files, do it in the home dir repo.

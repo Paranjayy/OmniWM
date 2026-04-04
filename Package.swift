@@ -21,10 +21,10 @@ let package = Package(
         )
     ],
     targets: [
-        .binaryTarget(
-            name: "GhosttyKit",
-            path: "Frameworks/GhosttyKit.xcframework"
-        ),
+//        .binaryTarget(
+//            name: "GhosttyKit",
+//            path: "Frameworks/GhosttyKit.xcframework"
+//        ),
         .target(
             name: "OmniWMIPC",
             path: "Sources/OmniWMIPC",
@@ -34,8 +34,9 @@ let package = Package(
         ),
         .target(
             name: "OmniWM",
-            dependencies: ["GhosttyKit", "OmniWMIPC"],
+            dependencies: [/*"GhosttyKit",*/ "OmniWMIPC"],
             path: "Sources/OmniWM",
+            exclude: ["QuakeTerminal"],
             resources: [
                 .process("Resources")
             ],
@@ -53,7 +54,7 @@ let package = Package(
                 .linkedFramework("QuartzCore"),
                 .linkedLibrary("z"),
                 .linkedLibrary("c++"),
-                .unsafeFlags(["-L\(ghosttyMacOSLibraryDirectory)"]),
+//                .unsafeFlags(["-L\(ghosttyMacOSLibraryDirectory)"]),
                 .unsafeFlags(["-F/System/Library/PrivateFrameworks", "-framework", "SkyLight"])
             ]
         ),

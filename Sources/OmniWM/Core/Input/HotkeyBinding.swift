@@ -70,13 +70,13 @@ struct HotkeyBinding: Codable, Equatable, Identifiable {
         case .moveColumnToWorkspace, .moveColumnToWorkspaceDown, .moveColumnToWorkspaceUp, .moveToWorkspace,
              .moveWindowToWorkspaceDown, .moveWindowToWorkspaceUp,
              .switchWorkspace, .switchWorkspaceNext, .switchWorkspacePrevious, .workspaceBackAndForth,
-             .focusWorkspaceAnywhere:
+             .focusWorkspaceAnywhere, .captureWorkspaceSnapshot:
             .workspace
         case .focus, .focusColumn, .focusColumnFirst, .focusColumnLast,
              .focusDownOrLeft, .focusPrevious, .focusUpOrRight,
              .openCommandPalette, .openMenuAnywhere, .toggleWorkspaceBarVisibility,
              .toggleHiddenBar, .toggleQuakeTerminal,
-             .toggleOverview:
+             .toggleOverview, .openWarpSwitcher:
             .focus
         case .move:
             .move
@@ -86,7 +86,8 @@ struct HotkeyBinding: Codable, Equatable, Identifiable {
         case .balanceSizes, .moveToRoot, .raiseAllFloatingWindows, .toggleFocusedWindowFloating,
              .assignFocusedWindowToScratchpad, .toggleScratchpadWindow,
              .toggleFullscreen, .toggleNativeFullscreen,
-             .toggleSplit, .swapSplit, .resizeInDirection, .preselect, .preselectClear, .toggleWorkspaceLayout:
+             .toggleSplit, .swapSplit, .resizeInDirection, .preselect, .preselectClear, .toggleWorkspaceLayout,
+             .trashFocusedWindow, .popLastTrashedWindow, .testHaptic:
             .layout
         case .cycleColumnWidthBackward, .cycleColumnWidthForward, .moveColumn, .toggleColumnFullWidth,
              .toggleColumnTabbed:

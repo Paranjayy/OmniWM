@@ -675,6 +675,9 @@ final class IPCQueryRouter {
             .layoutTransient
         case .scratchpad:
             .scratchpad
+        case .trash:
+            // Map to scratchpad or other IPC reason if IPCHiddenReason doesn't have trash yet
+            .scratchpad 
         }
     }
 

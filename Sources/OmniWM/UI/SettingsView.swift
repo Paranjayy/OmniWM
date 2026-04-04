@@ -9,7 +9,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            SettingsSidebar(selection: $selectedSection)
+            SettingsSidebar(settings: settings, selection: $selectedSection)
         } detail: {
             SettingsDetailView(
                 section: selectedSection,
@@ -31,6 +31,24 @@ struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
+            Section("Application Profile") {
+                Picker("Active Profile", selection: $settings.activeProfile) {
+                    ForEach(OmniProfile.allCases) { profile in
+                        Text(profile.displayName).tag(profile)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: settings.activeProfile == .godBuild ? "crown.fill" : "checkmark.circle")
+                        .foregroundStyle(settings.activeProfile == .godBuild ? .yellow : .secondary)
+                    Text(settings.activeProfile == .godBuild
+                         ? "God Build active — Warp Switcher, Trash Stack & Session Snapshots unlocked. Configure in the God Build tab."
+                         : "Standard profile — stable, conflict-free shortcuts for everyday use.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Appearance") {
                 Picker("Theme", selection: $settings.appearanceMode) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
@@ -41,7 +59,7 @@ struct GeneralSettingsTab: View {
                     controller.applyCurrentAppearanceMode()
                 }
 
-                Text("Controls the appearance of menus and workspace bar")
+                Text("Controls the core behaviour and visual architecture of OmniWM")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

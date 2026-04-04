@@ -138,3 +138,21 @@ james clear
 - Better inputs → better thoughts → better outputs (writing, decisions, ideas).
  
 - Visual Shortcut Map: A script to generate a visual HTML/Markdown guide of all RCmd/ROpt layers (inspired by davis7.sh). mun!\n
+
+
+- we use complex keys or 4/5 keys because to avoid left cmd+opt/ctrl/shift/caps/tab/esc/space/enter/backspace
+- GhosttyKit.xcframework commented because in building error and resolve it later somehow 
+
+# 🛡️ God-Build V47.2 Iteration (Completed)
+- **Manifesto Created**: [GODBUILD_MANIFESTO.md](file:///Users/paranjay/Developer/OmniWM/GODBUILD_MANIFESTO.md) is now the definitive guide for future builders.
+- **Power-3 Isolation Layer**: Sanitized `settings.json` and `karabiner.json` to use 3-modifier isolation (Control+Option+Command) without clashing with "Hyper" terminology.
+- **Warp Switcher UI**: Prototype HUD created in [Sources/OmniWM/UI/WarpSwitcherUI.swift](file:///Users/paranjay/Developer/OmniWM/Sources/OmniWM/UI/WarpSwitcherUI.swift).
+- **Snapshot Gallery UI**: Carousel HUD prototype in [Sources/OmniWM/UI/SnapshotGalleryHUD.swift](file:///Users/paranjay/Developer/OmniWM/Sources/OmniWM/UI/SnapshotGalleryHUD.swift).
+- **Haptic Ripple**: Added new tactile rhythms to `HapticManager.swift`.
+
+### 🏁 Remaining God-Build Final Iterations
+- [ ] **Warp Switcher (HUD)**: Hook up window metadata to the 3-modifier trigger.
+- [ ] **Snapshot Gallery**: Navigate snapshots with `WASD` while in the gallery.
+- [ ] **Trash Visualizer**: Small glassmorphic corner icon/tray for recently trashed windows.
+- [ ] **Omniglide**: Ultra-smooth haptic/visual window transitions.
+- [ ] **Loom**: Real-time visualization of layer activation (HUD indicator for RCmd/ROpt).

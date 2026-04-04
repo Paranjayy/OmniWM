@@ -98,6 +98,7 @@ struct SettingsExport: Codable {
 
     var preventSleepEnabled: Bool
     var updateChecksEnabled: Bool
+    var workspaceBackJumpEnabled: Bool
     var ipcEnabled: Bool
     var scrollGestureEnabled: Bool
     var scrollSensitivity: Double
@@ -123,6 +124,11 @@ struct SettingsExport: Codable {
     var quakeTerminalCustomFrame: QuakeTerminalFrameExport?
 
     var appearanceMode: String
+    var activeProfile: String
+
+    var warpSwitcherEnabled: Bool
+    var windowTrashEnabled: Bool
+    var sessionSnapshotEnabled: Bool
 }
 
 // MARK: - Defaults & Diffing
@@ -184,6 +190,7 @@ extension SettingsExport {
             monitorDwindleSettings: [],
             preventSleepEnabled: false,
             updateChecksEnabled: true,
+            workspaceBackJumpEnabled: true,
             ipcEnabled: false,
             scrollGestureEnabled: true,
             scrollSensitivity: 5.0,
@@ -205,7 +212,11 @@ extension SettingsExport {
             quakeTerminalMonitorMode: QuakeTerminalMonitorMode.focusedWindow.rawValue,
             quakeTerminalUseCustomFrame: false,
             quakeTerminalCustomFrame: nil,
-            appearanceMode: AppearanceMode.dark.rawValue
+            appearanceMode: AppearanceMode.dark.rawValue,
+            activeProfile: OmniProfile.official.rawValue,
+            warpSwitcherEnabled: true,
+            windowTrashEnabled: true,
+            sessionSnapshotEnabled: true
         )
     }
 
@@ -372,6 +383,7 @@ extension SettingsStore {
             monitorDwindleSettings: monitorDwindleSettings,
             preventSleepEnabled: preventSleepEnabled,
             updateChecksEnabled: updateChecksEnabled,
+            workspaceBackJumpEnabled: workspaceBackJumpEnabled,
             ipcEnabled: ipcEnabled,
             scrollGestureEnabled: scrollGestureEnabled,
             scrollSensitivity: scrollSensitivity,
@@ -393,7 +405,11 @@ extension SettingsStore {
             quakeTerminalMonitorMode: quakeTerminalMonitorMode.rawValue,
             quakeTerminalUseCustomFrame: quakeTerminalUseCustomFrame,
             quakeTerminalCustomFrame: quakeTerminalCustomFrame.map(QuakeTerminalFrameExport.init(frame:)),
-            appearanceMode: appearanceMode.rawValue
+            appearanceMode: appearanceMode.rawValue,
+            activeProfile: activeProfile.rawValue,
+            warpSwitcherEnabled: warpSwitcherEnabled,
+            windowTrashEnabled: windowTrashEnabled,
+            sessionSnapshotEnabled: sessionSnapshotEnabled
         )
 
         let outputData = try export.exportData(mode: mode)
@@ -508,6 +524,7 @@ extension SettingsStore {
 
         preventSleepEnabled = export.preventSleepEnabled
         updateChecksEnabled = export.updateChecksEnabled
+        workspaceBackJumpEnabled = export.workspaceBackJumpEnabled
         ipcEnabled = export.ipcEnabled
         scrollGestureEnabled = export.scrollGestureEnabled
         scrollSensitivity = export.scrollSensitivity
@@ -538,6 +555,11 @@ extension SettingsStore {
         quakeTerminalCustomFrame = export.quakeTerminalCustomFrame?.frame
 
         appearanceMode = AppearanceMode(rawValue: export.appearanceMode) ?? .automatic
+        activeProfile = OmniProfile(rawValue: export.activeProfile) ?? .official
+
+        warpSwitcherEnabled = export.warpSwitcherEnabled
+        windowTrashEnabled = export.windowTrashEnabled
+        sessionSnapshotEnabled = export.sessionSnapshotEnabled
     }
 
     private static func normalizedImportedWorkspaceConfigurations(

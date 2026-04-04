@@ -14,7 +14,10 @@ final class CommandHandler {
     }
 
     func handleCommand(_ command: HotkeyCommand) {
-        _ = performCommand(command)
+        let result = performCommand(command)
+        if result == .executed && ExperimentFlags.shared.isGodBuildActive {
+            HapticManager.shared.trigger(.sharpClick)
+        }
     }
 
     @discardableResult
@@ -136,6 +139,33 @@ final class CommandHandler {
             toggleWorkspaceLayout()
         case .toggleOverview:
             controller.toggleOverview()
+        case .trashFocusedWindow:
+            if ExperimentFlags.shared.isGodBuildActive && controller.settings.windowTrashEnabled {
+                controller.trashFocusedWindow()
+            }
+        case .popLastTrashedWindow:
+            if ExperimentFlags.shared.isGodBuildActive && controller.settings.windowTrashEnabled {
+                controller.popLastTrashedWindow()
+            }
+        case .testHaptic:
+            if ExperimentFlags.shared.isGodBuildActive {
+                HapticManager.shared.trigger(.alignment)
+            }
+        case .captureWorkspaceSnapshot:
+            if ExperimentFlags.shared.isGodBuildActive && controller.settings.sessionSnapshotEnabled,
+               let activeWs = controller.activeWorkspace() {
+                // Build a lightweight layout descriptor for this snapshot
+                let windowCount = controller.workspaceWindowCount(for: activeWs.id)
+                let layoutJSON = "{\"workspaceName\":\"\(activeWs.name)\",\"windowCount\":\(windowCount)}"
+                WorkspaceSnapshotManager.shared.capture(
+                    workspaceId: "\(activeWs.id)",
+                    layoutJSON: layoutJSON
+                )
+            }
+        case .openWarpSwitcher:
+            if ExperimentFlags.shared.isGodBuildActive && controller.settings.warpSwitcherEnabled {
+                controller.openWarpSwitcher()
+            }
         }
 
         return .executed

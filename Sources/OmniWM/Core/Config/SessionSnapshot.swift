@@ -35,6 +35,7 @@ final class SessionRestoreLookup {
 
     /// Returns the best-matching workspace ID for the given bundleId/title, consuming
     /// the matched entry so it cannot be used again.
+    @MainActor
     func consumeMatch(
         for bundleId: String?,
         title: String?,

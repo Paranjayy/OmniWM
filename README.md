@@ -226,14 +226,14 @@ Layout legend:
 |--------|------------------|--------|
 | Switch to Workspace 1-9 | `Option + 1-9` | `Shared` |
 | Move Window to Workspace 1-9 | `Option + Shift + 1-9` | `Shared` |
-| Switch to Previous Workspace (Back and Forth) | `Control + Option + Tab` | `Shared` |
+| Switch to Previous Workspace (Back and Forth) | `Option + Command + Tab` | `Shared` |
 | Switch to Next Workspace | `Unassigned` | `Shared` |
 | Switch to Previous Workspace (Sequential) | `Unassigned` | `Shared` |
-| Move Window to Workspace Up | `Control + Option + Shift + Up Arrow` | `Shared` |
-| Move Window to Workspace Down | `Control + Option + Shift + Down Arrow` | `Shared` |
+| Move Window to Workspace Up | `Option + Command + Shift + Up Arrow` | `Shared` |
+| Move Window to Workspace Down | `Option + Command + Shift + Down Arrow` | `Shared` |
 | Move Column to Workspace 1-9 | `Unassigned` | `Niri` |
-| Move Column to Workspace Up | `Control + Option + Shift + Page Up` | `Niri` |
-| Move Column to Workspace Down | `Control + Option + Shift + Page Down` | `Niri` |
+| Move Column to Workspace Up | `Option + Command + Shift + Page Up` | `Niri` |
+| Move Column to Workspace Down | `Option + Command + Shift + Page Down` | `Niri` |
 
 #### Focus
 
@@ -245,13 +245,13 @@ Layout legend:
 | Traverse Forward | `Unassigned` | `Niri` |
 | Focus First Column | `Option + Home` | `Niri` |
 | Focus Last Column | `Option + End` | `Niri` |
-| Focus Column 1-9 | `Control + Option + 1-9` | `Niri` |
-| Toggle Command Palette | `Control + Option + Space` | `Shared` |
-| Open Menu Anywhere | `Control + Option + M` | `Shared` |
+| Focus Column 1-9 | `Option + Command + 1-9` | `Niri` |
+| Toggle Command Palette | `Option + Command + Space` | `Shared` |
+| Open Menu Anywhere | `Option + Command + M` | `Shared` |
 | Toggle Workspace Bar | `Unassigned` | `Shared` |
 | Toggle Hidden Bar | `Unassigned` | `Shared` |
 | Toggle Quake Terminal | `` Option + ` `` | `Shared` |
-| Toggle Overview | `Option + Shift + O` | `Shared` |
+| Toggle Overview | `Option + Command + O` | `Shared` |
 
 #### Move Window
 
@@ -291,11 +291,11 @@ Layout legend:
 
 | Action | Default Shortcut | Layout |
 |--------|------------------|--------|
-| Move Column Left / Right | `Control + Option + Shift + Left / Right Arrow` | `Niri` |
-| Toggle Column Tabbed | `Option + T` | `Niri` |
-| Cycle Column Width Forward | `Option + .` | `Shared` |
-| Cycle Column Width Backward | `Option + ,` | `Shared` |
-| Toggle Column Full Width | `Option + Shift + F` | `Niri` |
+| Move Column Left / Right | `Option + Command + Shift + Left / Right Arrow` | `Niri` |
+| Toggle Column Tabbed | `Hyper + T` (Isolated) | `Niri` |
+| Cycle Column Width Forward | `Hyper + .` (Isolated) | `Shared` |
+| Cycle Column Width Backward | `Hyper + ,` (Isolated) | `Shared` |
+| Toggle Column Full Width | `Hyper + F` (Isolated) | `Niri` |
 
 In Niri, `Move Left / Right` expels the focused window out of multi-window columns or consumes a single-window column into the adjacent column. `Move Up / Down` keeps the current in-column reorder behavior.
 

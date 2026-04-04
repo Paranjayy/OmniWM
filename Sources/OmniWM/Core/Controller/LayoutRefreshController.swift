@@ -101,12 +101,6 @@ import QuartzCore
     weak var controller: WMController?
     static let hiddenWindowEdgeRevealEpsilon: CGFloat = 1.0
 
-    enum HideReason {
-        case workspaceInactive
-        case layoutTransient
-        case scratchpad
-    }
-
     struct LayoutState {
         struct ClosingAnimation {
             let windowId: Int
@@ -1948,6 +1942,8 @@ import QuartzCore
             return .layoutTransient(side)
         case .scratchpad:
             return .scratchpad
+        case .trash:
+            return .trash
         }
     }
 
@@ -1997,7 +1993,7 @@ import QuartzCore
             ?? controller.workspaceManager.monitors.map(HiddenPlacementMonitorContext.init)
 
         switch reason {
-        case .workspaceInactive, .scratchpad:
+        case .workspaceInactive, .scratchpad, .trash:
             return HiddenWindowPlacementResolver.physicalScreenEdgeOrigin(
                 for: frame.size,
                 requestedSide: side,
@@ -2045,6 +2041,19 @@ import QuartzCore
         guard let controller,
               let hiddenState = controller.workspaceManager.hiddenState(for: entry.token),
               hiddenState.isScratchpad
+        else {
+            return
+        }
+
+        restoreWindowFromHiddenState(entry, monitor: monitor, hiddenState: hiddenState)
+        controller.workspaceManager.setHiddenState(nil, for: entry.token)
+        controller.axManager.unsuppressFrameWrites([(entry.handle.pid, entry.windowId)])
+    }
+
+    func unhideTrashWindow(_ entry: WindowModel.Entry, monitor: Monitor) {
+        guard let controller,
+              let hiddenState = controller.workspaceManager.hiddenState(for: entry.token),
+              hiddenState.isTrash
         else {
             return
         }

@@ -9,6 +9,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case borders
     case bar
     case hotkeys
+    case godBuild
     case quakeTerminal
 
     var id: String { rawValue }
@@ -23,6 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .borders: "Borders"
         case .bar: "Bar"
         case .hotkeys: "Hotkeys"
+        case .godBuild: "God Build"
         case .quakeTerminal: "Quake Terminal"
         }
     }
@@ -37,6 +39,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .borders: "square.dashed"
         case .bar: "menubar.rectangle"
         case .hotkeys: "keyboard"
+        case .godBuild: "crown.fill"
         case .quakeTerminal: "terminal"
         }
     }

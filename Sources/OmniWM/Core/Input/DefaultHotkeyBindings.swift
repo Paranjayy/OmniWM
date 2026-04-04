@@ -322,14 +322,24 @@ enum DefaultHotkeyBindings {
         bindings.append(HotkeyBinding(
             id: "toggleWorkspaceLayout",
             command: .toggleWorkspaceLayout,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey | controlKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey | controlKey))
         ))
 
         bindings.append(HotkeyBinding(
             id: "toggleOverview",
             command: .toggleOverview,
-            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_O), modifiers: UInt32(optionKey | controlKey | shiftKey))
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_O), modifiers: UInt32(optionKey | controlKey | cmdKey))
         ))
+
+        let godLayer = UInt32(cmdKey | controlKey | optionKey)
+
+        bindings.append(contentsOf: [
+            HotkeyBinding(id: "trashFocusedWindow", command: .trashFocusedWindow, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: godLayer)),
+            HotkeyBinding(id: "popLastTrashedWindow", command: .popLastTrashedWindow, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_P), modifiers: godLayer)),
+            HotkeyBinding(id: "testHaptic", command: .testHaptic, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_H), modifiers: godLayer)),
+            HotkeyBinding(id: "captureWorkspaceSnapshot", command: .captureWorkspaceSnapshot, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: godLayer)),
+            HotkeyBinding(id: "openWarpSwitcher", command: .openWarpSwitcher, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: godLayer))
+        ])
 
         return bindings
     }

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni Spectral Hub | V46 God Build</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030303;
+            --card-bg: rgba(15, 15, 15, 0.85);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --hyper: #ff8c00;
+            --omni-f: #7d2ae8;
+            --omni-m: #00f2fe;
+            --arc: #ff3366;
+            --text-main: #ffffff;
+            --text-dim: rgba(255, 255, 255, 0.4);
+            --key-bg: linear-gradient(180deg, #222 0%, #111 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(circle at 50% -20%, rgba(125, 42, 232, 0.15), transparent),
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        header h1 {
+            font-size: 4.5rem;
+            font-weight: 800;
+            letter-spacing: -4px;
+            background: linear-gradient(to bottom, #fff, #666);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* THE SPECTRAL KEYBOARD */
+        .keyboard-hub {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 50px;
+            padding: 50px;
+            backdrop-filter: blur(40px);
+            margin-bottom: 60px;
+            box-shadow: 0 50px 150px rgba(0, 0, 0, 0.8);
+            position: relative;
+        }
+
+        .info-panel {
+            min-height: 130px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 25px;
+            padding: 30px;
+            margin-bottom: 50px;
+            display: flex;
+            align-items: center;
+            gap: 35px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 2px 10px rgba(255, 255, 255, 0.05);
+        }
+
+        .info-icon {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, var(--hyper), var(--omni-f));
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.2rem;
+            box-shadow: 0 10px 30px rgba(255, 140, 0, 0.3);
+        }
+
+        .key-row {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+        .key {
+            background: var(--key-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            height: 68px;
+            min-width: 68px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            color: var(--text-dim);
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 4px 0 #000, 0 8px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .key:hover {
+            transform: translateY(-8px);
+            filter: brightness(1.3);
+            border-color: #fff;
+            box-shadow: 0 12px 0 #000, 0 20px 40px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+        }
+
+        .key-label {
+            font-weight: 700;
+            color: #eee;
+        }
+
+        .hyper-star {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 0.6rem;
+            color: var(--hyper);
+            opacity: 0;
+        }
+
+        .key.mapped-hyper .hyper-star {
+            opacity: 1;
+        }
+
+        /* THE LED TRAY */
+        .led-tray {
+            display: flex;
+            gap: 4px;
+            position: absolute;
+            bottom: 10px;
+        }
+
+        .led {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Overlap & Spectral Shadows */
+        .key.mapped-hyper {
+            border-bottom: 3px solid var(--hyper);
+        }
+
+        .key.mapped-omni-f {
+            border-bottom: 3px solid var(--omni-f);
+        }
+
+        .key.mapped-omni-m {
+            border-bottom: 3px solid var(--omni-m);
+        }
+
+        .key.mapped-arc {
+            border-bottom: 3px solid var(--arc);
+        }
+
+        .key.overlap {
+            border-image: linear-gradient(to right, var(--hyper), var(--omni-f), var(--omni-m)) 1;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+        }
+
+        /* KEY WIDTHS */
+        .key.tab {
+            min-width: 100px;
+        }
+
+        .key.caps {
+            min-width: 110px;
+            background: var(--hyper);
+            color: #000;
+            border: none;
+        }
+
+        .key.enter {
+            min-width: 130px;
+        }
+
+        .key.shift-l,
+        .key.shift-r {
+            min-width: 150px;
+        }
+
+        .key.space {
+            min-width: 450px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+            gap: 30px;
+        }
+
+        .section-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 40px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+        }
+
+        .section-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 25px;
+            letter-spacing: -1px;
+        }
+
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        kbd {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 5px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .alias {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--omni-m);
+            background: rgba(0, 242, 254, 0.1);
+            padding: 3px 10px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>SPECTRAL HUB</h1>
+            <p>V46 | THE ULTIMATE OVERLAP MATRIX</p>
+        </header>
+
+        <div class="keyboard-hub">
+            <div class="info-panel">
+                <div class="info-icon">✨</div>
+                <div class="info-text">
+                    <h2 id="info-title">Star Logic Enabled</h2>
+                    <p id="info-desc">Hover to see dual-system spectral mappings for Hyper ✨ and Omni.</p>
+                </div>
+            </div>
+
+            <div class="keyboard-grid">
+                <!-- ROW 1 -->
+                <div class="key-row">
+                    <div class="key"><span class="key-label">`</span></div>
+                    <div class="key overlap mapped-hyper" data-title="Key: 1"
+                        data-desc="✨1: Fullscreen Capture. RCmd: Workspace 1. ROpt: Focus App 1."><span
+                            class="key-label">1</span><span class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key overlap mapped-hyper" data-title="Key: 2"
+                        data-desc="✨2: Area Capture (Shottr). RCmd: Workspace 2. ROpt: Focus App 2."><span
+                            class="key-label">2</span><span class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key overlap mapped-hyper" data-title="Key: 3"
+                        data-desc="✨3: Window Capture. RCmd: Workspace 3. ROpt: Focus App 3."><span
+                            class="key-label">3</span><span class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key overlap mapped-hyper" data-title="Key: 4"
+                        data-desc="✨4: Record/Scroll Capture. RCmd: Workspace 4. ROpt: Focus App 4."><span
+                            class="key-label">4</span><span class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Key: 5"
+                        data-desc="RCmd: Workspace 5. ROpt: Focus App 5."><span class="key-label">5</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Key: 6" data-desc="Workspace 6 (❤️)"><span
+                            class="key-label">6</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Key: 7" data-desc="Workspace 7 (🚀)"><span
+                            class="key-label">7</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Key: 8" data-desc="Workspace 8 (🧼)"><span
+                            class="key-label">8</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Key: 9" data-desc="Workspace 9 (💼)"><span
+                            class="key-label">9</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key"><span class="key-label">0</span></div>
+                    <div class="key"><span class="key-label">-</span></div>
+                    <div class="key"><span class="key-label">=</span></div>
+                    <div class="key" style="min-width: 60px;"><span class="key-label">BS</span></div>
+                </div>
+
+                <!-- ROW 2 -->
+                <div class="key-row">
+                    <div class="key tab"><span class="key-label">TAB</span></div>
+                    <div class="key"><span class="key-label">Q</span></div>
+                    <div class="key mapped-omni-f" data-title="Key: W"
+                        data-desc="ROpt: Focus Up. RCmd (Arc): Next Tab. Shift+ROpt: Physical Move Up."><span
+                            class="key-label">W</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--arc)"></div>
+                        </div>
+                    </div>
+                    <div class="key"><span class="key-label">E</span></div>
+                    <div class="key mapped-omni-m" data-title="Raise All" data-desc="RCmd+R: Pull windows to top."><span
+                            class="key-label">R</span></div>
+                    <div class="key mapped-hyper" data-title="Terminal"
+                        data-desc="✨T: Launch Ghostty. ⌥T (Shottr): OCR."><span class="key-label">T</span><span
+                            class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-hyper" data-title="Download" data-desc="✨Y: Raycast Downloader."><span
+                            class="key-label">Y</span><span class="hyper-star">✨</span></div>
+                    <div class="key"><span class="key-label">U</span></div>
+                    <div class="key"><span class="key-label">I</span></div>
+                    <div class="key mapped-omni-m" data-title="Overview" data-desc="RCmd+O: OmniWM Overview."><span
+                            class="key-label">O</span></div>
+                    <div class="key"><span class="key-label">P</span></div>
+                    <div class="key"><span class="key-label">[</span></div>
+                    <div class="key"><span class="key-label">]</span></div>
+                </div>
+
+                <!-- ROW 3 -->
+                <div class="key-row">
+                    <div class="key caps"><span class="key-label">HYPER</span></div>
+                    <div class="key mapped-hyper" data-title="Arc Browser"
+                        data-desc="✨A: Launch Arc. Focus Window Left."><span class="key-label">A</span><span
+                            class="hyper-star">✨</span></div>
+                    <div class="key mapped-omni-f" data-title="Key: S" data-desc="ROpt: Focus Down. RCmd: Prev Tab.">
+                        <span class="key-label">S</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--arc)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-f" data-title="Key: D"
+                        data-desc="ROpt: Focus Right. System: Show Desktop."><span class="key-label">D</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--omni-f)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key"><span class="key-label">F</span></div>
+                    <div class="key mapped-omni-m" data-title="Toggle Float" data-desc="RCmd+G: Window floating."><span
+                            class="key-label">G</span></div>
+                    <div class="key"><span class="key-label">H</span></div>
+                    <div class="key"><span class="key-label">J</span></div>
+                    <div class="key"><span class="key-label">K</span></div>
+                    <div class="key"><span class="key-label">L</span></div>
+                    <div class="key enter"><span class="key-label">ENTER</span></div>
+                </div>
+
+                <!-- ROW 4 -->
+                <div class="key-row">
+                    <div class="key shift-l"><span class="key-label">SHIFT</span></div>
+                    <div class="key mapped-omni-m" data-title="Zen Mode" data-desc="RCmd+Z: Zen/Hide others."><span
+                            class="key-label">Z</span></div>
+                    <div class="key"><span class="key-label">X</span></div>
+                    <div class="key"><span class="key-label">C</span></div>
+                    <div class="key mapped-hyper" data-title="Log: V"
+                        data-desc="✨V: Clipboard History. ⌃⌥V: Activity Monitor."><span class="key-label">V</span><span
+                            class="hyper-star">✨</span>
+                        <div class="led-tray">
+                            <div class="led" style="background:var(--hyper)"></div>
+                            <div class="led" style="background:var(--omni-m)"></div>
+                        </div>
+                    </div>
+                    <div class="key mapped-omni-m" data-title="Toggle Bar" data-desc="RCmd+B: Workspace Sidebar."><span
+                            class="key-label">B</span></div>
+                    <div class="key"><span class="key-label">N</span></div>
+                    <div class="key mapped-hyper" data-title="Streams" data-desc="✨M: Search popcorn."><span
+                            class="key-label">M</span><span class="hyper-star">✨</span></div>
+                    <div class="key"><span class="key-label">
+                            << /span>
+                    </div>
+                    <div class="key"><span class="key-label">></span></div>
+                    <div class="key shift-r"><span class="key-label">SHIFT</span></div>
+                </div>
+
+                <!-- ROW 5 -->
+                <div class="key-row">
+                    <div class="key">FN</div>
+                    <div class="key">CTRL</div>
+                    <div class="key">OPT</div>
+                    <div class="key">CMD</div>
+                    <div class="key space" data-title="PALETTE" data-desc="⌘Space: Raycast Search Launcher."><span
+                            class="key-label">SPACE</span></div>
+                    <div class="key">CMD</div>
+                    <div class="key">OPT</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="section-card">
+                <h2 style="color:var(--omni-f)">The Navigation Layer</h2>
+                <div class="shortcut-item"><span>Focus Frame</span><kbd>ROpt</kbd> <kbd>WASD</kbd></div>
+                <div class="shortcut-item"><span>Reorder Physical</span><kbd>ROpt</kbd> <kbd>⇧</kbd> <kbd>WASD</kbd>
+                </div>
+                <div class="shortcut-item"><span>Workspace Jump</span><kbd>RCmd</kbd> <kbd>W/S</kbd></div>
+            </div>
+            <div class="section-card">
+                <h2 style="color:var(--hyper)">Spectral Alpha (✨)</h2>
+                <div class="shortcut-item">
+                    <div>Clipboard History <span class="alias">copy</span></div> <kbd>✨</kbd> <kbd>V</kbd>
+                </div>
+                <div class="shortcut-item">
+                    <div>Arc Browser <span class="alias">arc</span></div> <kbd>✨</kbd> <kbd>A</kbd>
+                </div>
+                <div class="shortcut-item">
+                    <div>Search Streams <span class="alias">movieshowtv</span></div> <kbd>✨</kbd> <kbd>M</kbd>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const keys = document.querySelectorAll('.key');
+        const infoTitle = document.getElementById('info-title');
+        const infoDesc = document.getElementById('info-desc');
+
+        keys.forEach(key => {
+            key.addEventListener('mouseenter', () => {
+                const title = key.getAttribute('data-title');
+                const desc = key.getAttribute('data-desc');
+                if (title) {
+                    infoTitle.innerText = title;
+                    infoDesc.innerText = desc;
+                    infoTitle.style.color = '#fff';
+                    infoTitle.style.textShadow = '0 0 10px rgba(255,255,255,0.5)';
+                }
+            });
+            key.addEventListener('mouseleave', () => {
+                infoTitle.innerText = "Star Logic Enabled";
+                infoDesc.innerText = "Hover to see dual-system spectral mappings for Hyper ✨ and Omni.";
+                infoTitle.style.color = '';
+                infoTitle.style.textShadow = '';
+            });
+        });
+    </script>
+</body>
+
+</html>

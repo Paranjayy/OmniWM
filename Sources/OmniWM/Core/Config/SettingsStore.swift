@@ -1,11 +1,22 @@
-import AppKit
 import Foundation
+
+enum QuakeTerminalPosition: String, CaseIterable, Codable {
+    case top, center, bottom
+    var displayName: String { rawValue.capitalized }
+}
 
 @MainActor @Observable
 final class SettingsStore {
     private let defaults: UserDefaults
 
     var onIPCEnabledChanged: (@MainActor (Bool) -> Void)?
+
+    var activeProfile: OmniProfile {
+        didSet {
+            defaults.set(activeProfile.rawValue, forKey: Keys.activeProfile)
+            ExperimentFlags.shared.activeProfile = activeProfile
+        }
+    }
 
     var hotkeysEnabled: Bool {
         didSet { defaults.set(hotkeysEnabled, forKey: Keys.hotkeysEnabled) }
@@ -368,6 +379,18 @@ final class SettingsStore {
         didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) }
     }
 
+    var warpSwitcherEnabled: Bool {
+        didSet { defaults.set(warpSwitcherEnabled, forKey: Keys.warpSwitcherEnabled) }
+    }
+
+    var windowTrashEnabled: Bool {
+        didSet { defaults.set(windowTrashEnabled, forKey: Keys.windowTrashEnabled) }
+    }
+
+    var sessionSnapshotEnabled: Bool {
+        didSet { defaults.set(sessionSnapshotEnabled, forKey: Keys.sessionSnapshotEnabled) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let baseline = SettingsExport.defaults()
@@ -517,6 +540,13 @@ final class SettingsStore {
         quakeTerminalCustomFrameHeight = defaults.object(forKey: Keys.quakeTerminalCustomFrameHeight) as? Double
         appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ??
             AppearanceMode(rawValue: baseline.appearanceMode) ?? .dark
+
+        warpSwitcherEnabled = defaults.object(forKey: Keys.warpSwitcherEnabled) as? Bool ?? true
+        windowTrashEnabled = defaults.object(forKey: Keys.windowTrashEnabled) as? Bool ?? true
+        sessionSnapshotEnabled = defaults.object(forKey: Keys.sessionSnapshotEnabled) as? Bool ?? true
+
+        activeProfile = OmniProfile(rawValue: defaults.string(forKey: Keys.activeProfile) ?? "") ?? .official
+        ExperimentFlags.shared.activeProfile = activeProfile
     }
 
     private static func loadBindings(from defaults: UserDefaults) -> [HotkeyBinding] {
@@ -1006,4 +1036,9 @@ private enum Keys {
 
     static let appearanceMode = "settings.appearanceMode"
     static let sessionSnapshot = "session.windowSnapshot"
+    static let activeProfile = "settings.activeProfile"
+
+    static let warpSwitcherEnabled = "settings.godBuild.warpSwitcherEnabled"
+    static let windowTrashEnabled = "settings.godBuild.windowTrashEnabled"
+    static let sessionSnapshotEnabled = "settings.godBuild.sessionSnapshotEnabled"
 }

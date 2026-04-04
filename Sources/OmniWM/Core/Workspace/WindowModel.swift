@@ -44,6 +44,7 @@ final class WindowModel {
         case workspaceInactive
         case layoutTransient(HideSide)
         case scratchpad
+        case trash
     }
 
     struct HiddenState: Equatable {
@@ -72,9 +73,16 @@ final class WindowModel {
             return false
         }
 
+        var isTrash: Bool {
+            if case .trash = reason {
+                return true
+            }
+            return false
+        }
+
         var restoresViaFloatingState: Bool {
             switch reason {
-            case .workspaceInactive, .scratchpad:
+            case .workspaceInactive, .scratchpad, .trash:
                 true
             case .layoutTransient:
                 false
