@@ -304,7 +304,7 @@ enum DefaultHotkeyBindings {
         bindings.append(HotkeyBinding(
             id: "toggleWorkspaceBarVisibility",
             command: .toggleWorkspaceBarVisibility,
-            binding: .unassigned
+            binding: KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: UInt32(controlKey | shiftKey | commandKey))
         ))
 
         bindings.append(HotkeyBinding(

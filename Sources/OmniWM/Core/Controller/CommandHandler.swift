@@ -131,6 +131,13 @@ final class CommandHandler {
             controller.openMenuAnywhere()
         case .toggleWorkspaceBarVisibility:
             controller.toggleWorkspaceBarVisibility()
+            let isHidden = WMController.shared.hiddenWorkspaceBarMonitorIds.contains(WMController.shared.monitorForInteraction()?.id ?? UUID())
+            HUDController.shared.showNotification(
+                title: "HUD CONTROLLER",
+                icon: isHidden ? "eye.slash" : "eye",
+                message: isHidden ? "Bar Hidden (5s peek mode)" : "Bar Visible",
+                highlightColor: .blue
+            )
         case .toggleHiddenBar:
             controller.toggleHiddenBar()
         case .toggleQuakeTerminal:
@@ -154,12 +161,17 @@ final class CommandHandler {
         case .captureWorkspaceSnapshot:
             if ExperimentFlags.shared.isGodBuildActive && controller.settings.sessionSnapshotEnabled,
                let activeWs = controller.activeWorkspace() {
-                // Build a lightweight layout descriptor for this snapshot
                 let windowCount = controller.workspaceWindowCount(for: activeWs.id)
                 let layoutJSON = "{\"workspaceName\":\"\(activeWs.name)\",\"windowCount\":\(windowCount)}"
                 WorkspaceSnapshotManager.shared.capture(
                     workspaceId: "\(activeWs.id)",
                     layoutJSON: layoutJSON
+                )
+                HUDController.shared.showNotification(
+                    title: "GOD BUILD SNAPSHOT",
+                    icon: "camera.viewfinder",
+                    message: "Layout cached for \(activeWs.name)",
+                    highlightColor: .orange
                 )
             }
         case .openWarpSwitcher:

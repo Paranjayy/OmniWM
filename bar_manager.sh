@@ -1,0 +1,1 @@
+Scripts/bar_manager.sh

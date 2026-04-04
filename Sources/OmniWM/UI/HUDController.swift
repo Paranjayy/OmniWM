@@ -40,7 +40,61 @@ public final class HUDController: NSWindowController {
         // Implementation for dynamic shortcut updates
         window?.orderFrontRegardless()
     }
+    
+    public func showNotification(title: String, icon: String, message: String, highlightColor: Color = .blue) {
+        let view = NotificationHUD(title: title, icon: icon, message: message, highlightColor: highlightColor)
+        window?.contentView = NSHostingView(rootView: view)
+        window?.orderFrontRegardless()
+        
+        // Auto-dismiss after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            self.window?.orderOut(nil)
+        }
+    }
 }
+
+private struct NotificationHUD: View {
+    let title: String
+    let icon: String
+    let message: String
+    let highlightColor: Color
+    
+    var body: some View {
+        HStack(spacing: 20) {
+            ZStack {
+                Circle().fill(highlightColor.opacity(0.15)).frame(width: 50, height: 50)
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(highlightColor)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title.uppercased())
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(highlightColor.opacity(0.7))
+                Text(message)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            Spacer()
+            
+            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 40)
+            
+            Text("5 sec")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.3))
+        }
+        .padding(.horizontal, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                .cornerRadius(25)
+                .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        )
+    }
+}
+
 
 private struct HUDView: View {
     var body: some View {
