@@ -109,7 +109,7 @@
 
 Small demo, not fully showing everything, gif recorded at 30fps due to size, some stuff is now more refined and better as soem gifs might be outdated, features shown:
 - Real quake/sticky terminal using ghostty's libghostty
-- Ghostty tabs supported
+- Best-effort macOS native-tab replacement support
 - IPC/CLI
 - Scrathpad/Sticky windows of any app
 - Niri Overview
@@ -282,6 +282,7 @@ Layout legend:
 | Preselect Left / Right / Up / Down | `Unassigned` | `Dwindle` |
 | Clear Preselection | `Unassigned` | `Dwindle` |
 | Raise All Floating Windows | `Option + Shift + R` | `Shared` |
+| Rescue Off-Screen Floating Windows | `Unassigned` | `Shared` |
 | Toggle Focused Window Floating | `Unassigned` | `Shared` |
 | Assign Focused Window to Scratchpad | `Unassigned` | `Shared` |
 | Toggle Scratchpad Window | `Unassigned` | `Shared` |
@@ -384,13 +385,14 @@ Hide or reveal status bar icons using a separator item:
 Access settings by clicking OmniWM's status bar icon and selecting **Settings** or **App Rules**.
 Mouse and gesture settings are available in Settings.
 
-OmniWM stores its editable config at `~/.config/omniwm/settings.json` but it's config that it uses is stored in UserDefaults.
+OmniWM stores its editable config at `~/.config/omniwm/settings.json`, while private runtime state lives in `UserDefaults`.
 
 - **Editable Config** writes the full canonical settings file, including hotkeys and monitor overrides, so it can be edited directly.
 - **Compact Backup** writes only values that differ from defaults. Import still merges that backup back into the full canonical settings model.
 - **Create Config File**, **Reveal Settings File**, and **Open Settings File** create `settings.json` on first use if it does not exist yet.
 - `updateChecksEnabled` is part of the persisted settings model, so it round-trips through full export, compact backup, and import.
 - Fetched release notes, release URLs, last-check timestamps, and skipped-release state stay out of `settings.json` and remain local runtime or private `UserDefaults` state only.
+- The persisted window restore catalog also stays in private `UserDefaults`. It stores local restore metadata such as workspace target, preferred monitor, floating geometry, and matching window identity fields so managed floating windows can be restored or rescued across relaunches without being exported to `settings.json`.
 
 ## App Rules
 
@@ -405,7 +407,20 @@ Configure per-application behavior in Settings > App Rules:
 Requirements:
 - SwiftPM with Swift 6.2+
 - macOS 15.0+
-- Ghostty's universal `libghostty.a` (build Ghostty and copy it to `Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a` so it includes both `arm64` and `x86_64`)
+- Zig `0.15.2`
+- Ghostty's universal `libghostty.a` at `Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty.a`
+
+Build Commands:
+
+```bash
+make build         # Run build preflight checks, build Zig kernels, then build OmniWM
+make test          # Run build preflight checks, build Zig kernels, then run the Swift test suite
+make kernels-test  # Run the Zig kernel test suite
+make verify        # Run lint + build + tests
+make release-check # Run release-oriented preflight and universal build checks
+```
+
+`make build` and `make test` are the supported entry points for contributors. They run the current preflight checks and Zig kernel build automatically before invoking SwiftPM, so you should not rely on calling `swift build` or `swift test` directly on a fresh checkout.
 
 ## Support
 

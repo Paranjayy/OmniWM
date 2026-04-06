@@ -319,11 +319,13 @@ final class WindowRuleEngine {
             return userDecision
         }
 
+        // Built-in layout can still inherit workspace assignment and sizing effects
+        // from a matching user auto rule.
         if let builtInRule,
            let builtInDecision = explicitDecision(
                builtInRule,
-               workspaceName: nil,
-               effects: .none
+               workspaceName: workspaceName,
+               effects: effects
            )
         {
             return builtInDecision
@@ -546,6 +548,14 @@ final class WindowRuleEngine {
         )
     }
 
+    private static func compileBuiltInRegex(_ pattern: String, source: String) -> NSRegularExpression {
+        do {
+            return try NSRegularExpression(pattern: pattern)
+        } catch {
+            preconditionFailure("Invalid built-in \(source) regex '\(pattern)': \(error)")
+        }
+    }
+
     private static func makeBuiltInRules() -> [CompiledRule] {
         var rules: [CompiledRule] = []
 
@@ -583,7 +593,10 @@ final class WindowRuleEngine {
                 CompiledRule(
                     rule: rule,
                     source: .builtIn("browserPictureInPicture"),
-                    titleRegex: try! NSRegularExpression(pattern: rule.titleRegex ?? ""),
+                    titleRegex: compileBuiltInRegex(
+                        rule.titleRegex ?? "",
+                        source: "browserPictureInPicture"
+                    ),
                     order: pipOffset + index
                 )
             )

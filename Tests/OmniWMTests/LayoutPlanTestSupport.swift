@@ -88,6 +88,7 @@ func installSynchronousFrameApplySuccessOverride(on controller: WMController) {
     controller.axManager.frameApplyOverrideForTests = { requests in
         requests.map { request in
             AXFrameApplyResult(
+                requestId: request.requestId,
                 pid: request.pid,
                 windowId: request.windowId,
                 targetFrame: request.frame,
@@ -114,10 +115,11 @@ func makeLayoutPlanTestController(
     workspaceConfigurations: [WorkspaceConfiguration] = [
         WorkspaceConfiguration(name: "1", monitorAssignment: .main),
         WorkspaceConfiguration(name: "2", monitorAssignment: .main)
-    ]
+    ],
+    windowFocusOperations: WindowFocusOperations? = nil
 ) -> WMController {
     resetSharedControllerStateForTests()
-    let operations = WindowFocusOperations(
+    let operations = windowFocusOperations ?? WindowFocusOperations(
         activateApp: { _ in },
         focusSpecificWindow: { _, _, _ in },
         raiseWindow: { _ in }
@@ -128,6 +130,9 @@ func makeLayoutPlanTestController(
         settings: settings,
         windowFocusOperations: operations
     )
+    // These fixtures assume viewport motion starts enabled unless a test
+    // explicitly turns it off later.
+    controller.setAnimationsEnabled(true, persist: false)
     installSynchronousFrameApplySuccessOverride(on: controller)
     controller.workspaceManager.applyMonitorConfigurationChange(monitors)
     return controller
@@ -148,14 +153,16 @@ func makeTwoMonitorLayoutPlanTestController() -> (
         secondaryMonitor: makeLayoutPlanSecondaryTestMonitor(
             name: "Secondary",
             x: 1920
-        )
+        ),
+        windowFocusOperations: nil
     )
 }
 
 @MainActor
 func makeTwoMonitorLayoutPlanTestController(
     primaryMonitor: Monitor,
-    secondaryMonitor: Monitor
+    secondaryMonitor: Monitor,
+    windowFocusOperations: WindowFocusOperations? = nil
 ) -> (
     controller: WMController,
     primaryMonitor: Monitor,
@@ -168,7 +175,8 @@ func makeTwoMonitorLayoutPlanTestController(
         workspaceConfigurations: [
             WorkspaceConfiguration(name: "1", monitorAssignment: .main),
             WorkspaceConfiguration(name: "2", monitorAssignment: .secondary)
-        ]
+        ],
+        windowFocusOperations: windowFocusOperations
     )
 
     guard let primaryWorkspaceId = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
@@ -191,6 +199,32 @@ func makeTwoMonitorLayoutPlanTestController(
 @MainActor
 func waitForLayoutPlanRefreshWork(on controller: WMController) async {
     await controller.layoutRefreshController.waitForRefreshWorkForTests()
+}
+
+@MainActor
+func waitForConditionForTests(
+    timeoutNanoseconds: UInt64 = 1_000_000_000,
+    pollIntervalNanoseconds: UInt64 = 10_000_000,
+    until condition: @MainActor @Sendable () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutNanoseconds) / 1_000_000_000)
+    repeat {
+        await Task.yield()
+        if condition() {
+            return true
+        }
+        try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+    } while Date() < deadline
+
+    await Task.yield()
+    return condition()
+}
+
+func waitForSemaphoreForTests(
+    _ semaphore: DispatchSemaphore,
+    timeout: DispatchTime
+) -> DispatchTimeoutResult {
+    semaphore.wait(timeout: timeout)
 }
 
 @MainActor

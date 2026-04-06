@@ -7,7 +7,12 @@ struct WorkspaceBarItem: Identifiable, Equatable {
     let name: String
     let rawName: String
     let isFocused: Bool
-    let windows: [WorkspaceBarWindowItem]
+    let tiledWindows: [WorkspaceBarWindowItem]
+    let floatingWindows: [WorkspaceBarWindowItem]
+
+    var windows: [WorkspaceBarWindowItem] {
+        tiledWindows + floatingWindows
+    }
 }
 
 struct WorkspaceBarWindowItem: Identifiable, Equatable {
@@ -56,12 +61,14 @@ final class WorkspaceBarModel {
 @MainActor
 struct WorkspaceBarView: View {
     let model: WorkspaceBarModel
+    @Bindable var motionPolicy: MotionPolicy
     let onFocusWorkspace: (WorkspaceBarItem) -> Void
     let onFocusWindow: (WindowToken) -> Void
 
     var body: some View {
         WorkspaceBarContentView(
             snapshot: model.snapshot,
+            animationsEnabled: motionPolicy.animationsEnabled,
             onFocusWorkspace: onFocusWorkspace,
             onFocusWindow: onFocusWindow
         )
@@ -75,6 +82,7 @@ struct WorkspaceBarMeasurementView: View {
     var body: some View {
         WorkspaceBarContentView(
             snapshot: snapshot,
+            animationsEnabled: false,
             onFocusWorkspace: { _ in },
             onFocusWindow: { _ in }
         )
@@ -85,6 +93,7 @@ struct WorkspaceBarMeasurementView: View {
 @MainActor
 private struct WorkspaceBarContentView: View {
     let snapshot: WorkspaceBarSnapshot
+    let animationsEnabled: Bool
     let onFocusWorkspace: (WorkspaceBarItem) -> Void
     let onFocusWindow: (WindowToken) -> Void
 
@@ -111,6 +120,7 @@ private struct WorkspaceBarContentView: View {
                     itemHeight: itemHeight,
                     windowSpacing: windowSpacing,
                     cornerRadius: cornerRadius,
+                    animationsEnabled: animationsEnabled,
                     showLabels: snapshot.showLabels,
                     onFocusWorkspace: { onFocusWorkspace(item) },
                     onFocusWindow: onFocusWindow
@@ -134,6 +144,7 @@ private struct WorkspaceItemView: View {
     let itemHeight: CGFloat
     let windowSpacing: CGFloat
     let cornerRadius: CGFloat
+    let animationsEnabled: Bool
     let showLabels: Bool
     let onFocusWorkspace: () -> Void
     let onFocusWindow: (WindowToken) -> Void
@@ -155,12 +166,30 @@ private struct WorkspaceItemView: View {
                 }
             }
 
-            ForEach(item.windows, id: \.id) { window in
+            ForEach(item.tiledWindows, id: \.id) { window in
                 WindowIconView(
                     window: window,
                     iconSize: iconSize,
                     isFocused: window.isFocused,
                     isInFocusedWorkspace: item.isFocused,
+                    animationsEnabled: animationsEnabled,
+                    onFocusWindow: onFocusWindow
+                )
+            }
+
+            if !item.tiledWindows.isEmpty && !item.floatingWindows.isEmpty {
+                Divider()
+                    .frame(height: iconSize)
+                    .padding(.horizontal, 2)
+            }
+
+            ForEach(item.floatingWindows, id: \.id) { window in
+                WindowIconView(
+                    window: window,
+                    iconSize: iconSize,
+                    isFocused: window.isFocused,
+                    isInFocusedWorkspace: item.isFocused,
+                    animationsEnabled: animationsEnabled,
                     onFocusWindow: onFocusWindow
                 )
             }
@@ -195,6 +224,7 @@ private struct WindowIconView: View {
     let iconSize: CGFloat
     let isFocused: Bool
     let isInFocusedWorkspace: Bool
+    let animationsEnabled: Bool
     let onFocusWindow: (WindowToken) -> Void
 
     @State private var isHovered = false
@@ -230,8 +260,8 @@ private struct WindowIconView: View {
             }
         }
         .scaleEffect(scale)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
-        .animation(.easeInOut(duration: 0.1), value: isHovered)
+        .animation(animationsEnabled ? .easeInOut(duration: 0.15) : nil, value: isFocused)
+        .animation(animationsEnabled ? .easeInOut(duration: 0.1) : nil, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import OmniWMIPC
 
 // MARK: - SettingsExport
 
@@ -72,6 +73,7 @@ struct SettingsExport: Codable {
 
     var workspaceBarEnabled: Bool
     var workspaceBarShowLabels: Bool
+    var workspaceBarShowFloatingWindows: Bool
     var workspaceBarWindowLevel: String
     var workspaceBarPosition: String
     var workspaceBarNotchAware: Bool
@@ -109,6 +111,7 @@ struct SettingsExport: Codable {
     var statusBarShowAppNames: Bool
     var statusBarUseWorkspaceId: Bool
     var commandPaletteLastMode: String
+    var animationsEnabled: Bool
 
     var hiddenBarIsCollapsed: Bool
 
@@ -167,6 +170,7 @@ extension SettingsExport {
             hotkeyBindings: HotkeyBindingRegistry.defaults(),
             workspaceBarEnabled: true,
             workspaceBarShowLabels: true,
+            workspaceBarShowFloatingWindows: false,
             workspaceBarWindowLevel: WorkspaceBarWindowLevel.popup.rawValue,
             workspaceBarPosition: WorkspaceBarPosition.overlappingMenuBar.rawValue,
             workspaceBarNotchAware: true,
@@ -201,6 +205,7 @@ extension SettingsExport {
             statusBarShowAppNames: false,
             statusBarUseWorkspaceId: false,
             commandPaletteLastMode: CommandPaletteMode.windows.rawValue,
+            animationsEnabled: true,
             hiddenBarIsCollapsed: true,
             quakeTerminalEnabled: true,
             quakeTerminalPosition: QuakeTerminalPosition.center.rawValue,
@@ -360,6 +365,7 @@ extension SettingsStore {
             hotkeyBindings: hotkeyBindings,
             workspaceBarEnabled: workspaceBarEnabled,
             workspaceBarShowLabels: workspaceBarShowLabels,
+            workspaceBarShowFloatingWindows: workspaceBarShowFloatingWindows,
             workspaceBarWindowLevel: workspaceBarWindowLevel.rawValue,
             workspaceBarPosition: workspaceBarPosition.rawValue,
             workspaceBarNotchAware: workspaceBarNotchAware,
@@ -394,6 +400,7 @@ extension SettingsStore {
             statusBarShowAppNames: statusBarShowAppNames,
             statusBarUseWorkspaceId: statusBarUseWorkspaceId,
             commandPaletteLastMode: commandPaletteLastMode.rawValue,
+            animationsEnabled: animationsEnabled,
             hiddenBarIsCollapsed: hiddenBarIsCollapsed,
             quakeTerminalEnabled: quakeTerminalEnabled,
             quakeTerminalPosition: quakeTerminalPosition.rawValue,
@@ -484,6 +491,7 @@ extension SettingsStore {
 
         workspaceBarEnabled = export.workspaceBarEnabled
         workspaceBarShowLabels = export.workspaceBarShowLabels
+        workspaceBarShowFloatingWindows = export.workspaceBarShowFloatingWindows
         workspaceBarWindowLevel = WorkspaceBarWindowLevel(rawValue: export.workspaceBarWindowLevel) ?? .popup
         workspaceBarPosition = WorkspaceBarPosition(rawValue: export.workspaceBarPosition) ?? .overlappingMenuBar
         workspaceBarNotchAware = export.workspaceBarNotchAware
@@ -535,6 +543,7 @@ extension SettingsStore {
         statusBarShowAppNames = export.statusBarShowAppNames
         statusBarUseWorkspaceId = export.statusBarUseWorkspaceId
         commandPaletteLastMode = CommandPaletteMode(rawValue: export.commandPaletteLastMode) ?? .windows
+        animationsEnabled = export.animationsEnabled
 
         hiddenBarIsCollapsed = export.hiddenBarIsCollapsed
 
@@ -580,9 +589,9 @@ extension SettingsStore {
         }
 
         let normalized = rebound
-            .filter { WorkspaceConfiguration.allowedNames.contains($0.name) }
+            .filter { WorkspaceIDPolicy.normalizeRawID($0.name) != nil }
             .filter { seen.insert($0.name).inserted }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted { WorkspaceIDPolicy.sortsBefore($0.name, $1.name) }
 
         if normalized.isEmpty {
             return BuiltInSettingsDefaults.workspaceConfigurations

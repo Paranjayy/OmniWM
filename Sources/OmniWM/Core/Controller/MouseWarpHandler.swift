@@ -34,7 +34,7 @@ final class MouseWarpHandler: NSObject {
         var debugCounters = DebugCounters()
     }
 
-    nonisolated(unsafe) static weak var _instance: MouseWarpHandler?
+    nonisolated(unsafe) static weak var sharedInstance: MouseWarpHandler?
     static let cooldownSeconds: TimeInterval = 0.05
 
     weak var controller: WMController?
@@ -63,7 +63,7 @@ final class MouseWarpHandler: NSObject {
             source.localEventsSuppressionInterval = 0.0
         }
 
-        MouseWarpHandler._instance = self
+        MouseWarpHandler.sharedInstance = self
 
         let eventMask: CGEventMask =
             (1 << CGEventType.mouseMoved.rawValue) |
@@ -72,19 +72,13 @@ final class MouseWarpHandler: NSObject {
 
         let callback: CGEventTapCallBack = { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let tap = MouseWarpHandler._instance?.state.eventTap {
+                if let tap = MouseWarpHandler.sharedInstance?.state.eventTap {
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
                 return Unmanaged.passUnretained(event)
             }
 
-            let location = event.location
-            let screenLocation = ScreenCoordinateSpace.toAppKit(point: location)
-            precondition(Thread.isMainThread, "Mouse warp taps are expected on the main run loop")
-
-            MainActor.assumeIsolated {
-                MouseWarpHandler._instance?.receiveTapMouseWarpMoved(at: screenLocation)
-            }
+            _ = MouseWarpHandler.processTapCallback(event: event)
 
             return Unmanaged.passUnretained(event)
         }
@@ -118,7 +112,7 @@ final class MouseWarpHandler: NSObject {
         }
         state.cooldownTimer?.invalidate()
         state.cooldownTimer = nil
-        MouseWarpHandler._instance = nil
+        MouseWarpHandler.sharedInstance = nil
         state.isWarping = false
         state.lastMonitorId = nil
         state.pendingWarpEvents.clear()
@@ -138,8 +132,25 @@ final class MouseWarpHandler: NSObject {
         state.pendingWarpEvents.clear()
     }
 
+    func handleTapCallbackForTests(event: CGEvent, isMainThread: Bool) -> Bool {
+        Self.processTapCallback(event: event, isMainThread: isMainThread)
+    }
+
     func receiveTapMouseWarpMoved(at location: CGPoint) {
         enqueuePendingWarpMove(at: location)
+    }
+
+    nonisolated private static func processTapCallback(
+        event: CGEvent,
+        isMainThread: Bool = Thread.isMainThread
+    ) -> Bool {
+        guard isMainThread else { return false }
+
+        let screenLocation = ScreenCoordinateSpace.toAppKit(point: event.location)
+        MainActor.assumeIsolated {
+            MouseWarpHandler.sharedInstance?.receiveTapMouseWarpMoved(at: screenLocation)
+        }
+        return true
     }
 
     private func handleMouseWarpMoved(at location: CGPoint) {

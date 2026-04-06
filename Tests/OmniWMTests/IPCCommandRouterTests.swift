@@ -103,6 +103,40 @@ private func prepareIPCNiriState(
         #expect(controller.activeWorkspace()?.name == "2")
     }
 
+    @Test func workspaceFocusNameResolvesWorkspace10AsRawWorkspaceID() {
+        let controller = makeLayoutPlanTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "10", monitorAssignment: .main)
+            ]
+        )
+        let router = makeIPCCommandRouter(for: controller)
+
+        let result = router.handle(
+            IPCWorkspaceRequest(name: .focusName, workspaceName: "10")
+        )
+
+        #expect(result == .executed)
+        #expect(controller.activeWorkspace()?.name == "10")
+    }
+
+    @Test func workspaceFocusNameRejectsAmbiguousDisplayNames() {
+        let controller = makeLayoutPlanTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", displayName: "Code", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "2", displayName: "Code", monitorAssignment: .main)
+            ]
+        )
+        let router = makeIPCCommandRouter(for: controller)
+
+        let result = router.handle(
+            IPCWorkspaceRequest(name: .focusName, workspaceName: "Code")
+        )
+
+        #expect(result == .invalidArguments)
+        #expect(controller.activeWorkspace()?.name == "1")
+    }
+
     @Test func switchWorkspaceTranslatesOneBasedNumbersBeforeRouting() {
         let controller = makeLayoutPlanTestController()
         let router = makeIPCCommandRouter(for: controller)
@@ -115,6 +149,23 @@ private func prepareIPCNiriState(
         #expect(controller.activeWorkspace()?.name == "2")
     }
 
+    @Test func switchWorkspaceSupportsWorkspace10() {
+        let controller = makeLayoutPlanTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "10", monitorAssignment: .main)
+            ]
+        )
+        let router = makeIPCCommandRouter(for: controller)
+
+        let result = router.handle(
+            .switchWorkspace(workspaceNumber: 10)
+        )
+
+        #expect(result == .executed)
+        #expect(controller.activeWorkspace()?.name == "10")
+    }
+
     @Test func switchWorkspaceNextRoutesRelativeCommand() {
         let controller = makeLayoutPlanTestController()
         let router = makeIPCCommandRouter(for: controller)
@@ -123,6 +174,26 @@ private func prepareIPCNiriState(
 
         #expect(result == .executed)
         #expect(controller.activeWorkspace()?.name == "2")
+    }
+
+    @Test func switchWorkspaceReturnsNotFoundWhenTargetWorkspaceIsAlreadyActive() {
+        let controller = makeLayoutPlanTestController()
+        let router = makeIPCCommandRouter(for: controller)
+
+        #expect(router.handle(.switchWorkspace(workspaceNumber: 2)) == .executed)
+        #expect(controller.activeWorkspace()?.name == "2")
+
+        let repeatedSwitchResult = router.handle(
+            .switchWorkspace(workspaceNumber: 2)
+        )
+
+        #expect(repeatedSwitchResult == .notFound)
+        #expect(controller.activeWorkspace()?.name == "2")
+
+        let backAndForthResult = router.handle(.switchWorkspaceBackAndForth)
+
+        #expect(backAndForthResult == .executed)
+        #expect(controller.activeWorkspace()?.name == "1")
     }
 
     @Test func switchWorkspaceBackAndForthReturnsToPreviousWorkspace() {
@@ -157,6 +228,68 @@ private func prepareIPCNiriState(
 
         #expect(result == .executed)
         #expect(controller.workspaceManager.workspace(for: token) == targetWorkspaceId)
+    }
+
+    @Test func moveToWorkspaceSupportsWorkspace10() throws {
+        let controller = makeLayoutPlanTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "10", monitorAssignment: .main)
+            ]
+        )
+        let router = makeIPCCommandRouter(for: controller)
+        let sourceWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "1", createIfMissing: false))
+        let targetWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "10", createIfMissing: false))
+        let handles = prepareIPCNiriState(
+            on: controller,
+            assignments: [
+                (sourceWorkspaceId, 2010)
+            ],
+            focusedWindowId: 2010
+        )
+        let token = try #require(handles[2010]).id
+
+        let result = router.handle(
+            .moveToWorkspace(workspaceNumber: 10)
+        )
+
+        #expect(result == .executed)
+        #expect(controller.workspaceManager.workspace(for: token) == targetWorkspaceId)
+    }
+
+    @Test func moveToWorkspaceOnMonitorRejectsWorkspaceOnWrongAdjacentMonitor() throws {
+        let primaryMonitor = makeLayoutPlanPrimaryTestMonitor(name: "Primary")
+        let secondaryMonitor = makeLayoutPlanSecondaryTestMonitor(name: "Secondary", x: 1920)
+        let controller = makeLayoutPlanTestController(
+            monitors: [primaryMonitor, secondaryMonitor],
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+                WorkspaceConfiguration(name: "10", monitorAssignment: .main)
+            ]
+        )
+        controller.enableNiriLayout()
+        controller.syncMonitorsToNiriEngine()
+
+        let router = makeIPCCommandRouter(for: controller)
+        let sourceWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "1", createIfMissing: false))
+        let targetWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "10", createIfMissing: false))
+        let handles = prepareIPCNiriState(
+            on: controller,
+            assignments: [
+                (sourceWorkspaceId, 2020)
+            ],
+            focusedWindowId: 2020
+        )
+        let token = try #require(handles[2020]).id
+
+        #expect(controller.workspaceManager.monitorId(for: targetWorkspaceId) == primaryMonitor.id)
+
+        let result = router.handle(
+            .moveToWorkspaceOnMonitor(workspaceNumber: 10, direction: .right)
+        )
+
+        #expect(result == .notFound)
+        #expect(controller.workspaceManager.workspace(for: token) == sourceWorkspaceId)
     }
 
     @Test func focusCommandReturnsIgnoredDisabledWhenControllerIsDisabled() {
@@ -234,6 +367,33 @@ private func prepareIPCNiriState(
         let result = router.handle(.raiseAllFloatingWindows)
 
         #expect(result == .notFound)
+    }
+
+    @Test func rescueOffscreenWindowsRoutesThroughControllerAndReturnsNotFoundWhenSettled() throws {
+        let controller = makeLayoutPlanTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main)
+            ]
+        )
+        let router = makeIPCCommandRouter(for: controller)
+        let workspaceId = try #require(controller.workspaceManager.workspaceId(for: "1", createIfMissing: false))
+        let monitor = try #require(controller.workspaceManager.monitor(for: workspaceId))
+        let token = controller.workspaceManager.addWindow(
+            makeLayoutPlanTestWindow(windowId: 2401),
+            pid: 2401,
+            windowId: 2401,
+            to: workspaceId,
+            mode: .floating
+        )
+        controller.workspaceManager.updateFloatingGeometry(
+            frame: CGRect(x: monitor.visibleFrame.minX - 1600, y: monitor.visibleFrame.minY - 1200, width: 320, height: 200),
+            for: token,
+            referenceMonitor: monitor
+        )
+
+        #expect(router.handle(.rescueOffscreenWindows) == .executed)
+        #expect(monitor.visibleFrame.contains(try #require(controller.axManager.lastAppliedFrame(for: token.windowId))))
+        #expect(router.handle(.rescueOffscreenWindows) == .notFound)
     }
 
     @Test func workspaceFocusNameReturnsNotFoundForUnknownWorkspace() {

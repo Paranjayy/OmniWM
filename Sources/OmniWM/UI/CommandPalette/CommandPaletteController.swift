@@ -65,6 +65,9 @@ private final class CommandPaletteActionBox: @unchecked Sendable {
     }
 }
 
+typealias CommandPaletteSummonWindowRightHandler =
+    (WMController, WindowHandle, WindowToken, WorkspaceDescriptor.ID) -> Void
+
 @MainActor
 struct CommandPaletteEnvironment {
     var frontmostApplication: () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
@@ -75,11 +78,8 @@ struct CommandPaletteEnvironment {
     var navigateToWindow: (WMController, WindowHandle) -> Void = { controller, handle in
         controller.navigateToCommandPaletteWindow(handle)
     }
-    var summonWindowRight: (WMController, WindowHandle, WindowToken, WorkspaceDescriptor.ID) -> Void = {
-        controller,
-        handle,
-        anchorToken,
-        anchorWorkspaceId in
+    var summonWindowRight: CommandPaletteSummonWindowRightHandler =
+        { controller, handle, anchorToken, anchorWorkspaceId in
         controller.summonCommandPaletteWindowRight(
             handle,
             anchorToken: anchorToken,
@@ -99,7 +99,6 @@ struct CommandPaletteEnvironment {
 
 @MainActor
 final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelegate {
-    static let shared = CommandPaletteController()
     static let unavailableMenuStatusText = "Open the palette while another app is frontmost to search its menus."
 
     struct InlineHint: Equatable {
@@ -128,6 +127,7 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
     @Published private(set) var isMenuLoading = false
 
     private let environment: CommandPaletteEnvironment
+    private let motionPolicy: MotionPolicy
     private var panel: NSPanel?
     private var eventMonitor: Any?
 
@@ -154,7 +154,11 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
         case pressMenu(CommandPaletteFocusTarget, AXUIElement)
     }
 
-    init(environment: CommandPaletteEnvironment = .init()) {
+    init(
+        motionPolicy: MotionPolicy,
+        environment: CommandPaletteEnvironment = .init()
+    ) {
+        self.motionPolicy = motionPolicy
         self.environment = environment
         super.init()
     }
@@ -745,7 +749,7 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             SkyLight.shared.orderWindow(UInt32(windowId), relativeTo: 0, order: .above)
 
             var psn = ProcessSerialNumber()
-            if GetProcessForPID(target.app.processIdentifier, &psn) == noErr {
+            if getProcessForPID(target.app.processIdentifier, &psn) == noErr {
                 _ = _SLPSSetFrontProcessWithOptions(&psn, UInt32(windowId), kCPSUserGenerated)
                 makeKeyWindow(psn: &psn, windowId: UInt32(windowId))
             }
@@ -797,10 +801,14 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = false
 
-        let hostingView = NSHostingView(rootView: CommandPaletteView(controller: self))
+        let hostingView = NSHostingView(rootView: makeRootView())
         panel.contentView = hostingView
 
         self.panel = panel
+    }
+
+    private func makeRootView() -> CommandPaletteView {
+        CommandPaletteView(controller: self, motionPolicy: motionPolicy)
     }
 
     private func positionPanel(_ panel: NSPanel) {
@@ -880,10 +888,15 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
     ) -> CommandPaletteSelectionTrigger? {
         Self.selectionTrigger(forKeyCode: keyCode, modifierFlags: modifierFlags)
     }
+
+    var panelForTests: NSPanel? {
+        panel
+    }
 }
 
 private struct CommandPaletteView: View {
     @ObservedObject var controller: CommandPaletteController
+    @Bindable var motionPolicy: MotionPolicy
 
     var body: some View {
         VStack(spacing: 0) {
@@ -901,10 +914,10 @@ private struct CommandPaletteView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 18))
                     if !controller.searchText.isEmpty {
-                        Button(action: { controller.searchText = "" }) {
+                        Button(action: { controller.searchText = "" }, label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
-                        }
+                        })
                         .buttonStyle(.plain)
                     }
                 }
@@ -961,7 +974,11 @@ private struct CommandPaletteView: View {
                     }
                     .onChange(of: controller.selectedItemID) { _, newValue in
                         if let newValue {
-                            withAnimation(.easeInOut(duration: 0.1)) {
+                            if motionPolicy.animationsEnabled {
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    proxy.scrollTo(newValue, anchor: .center)
+                                }
+                            } else {
                                 proxy.scrollTo(newValue, anchor: .center)
                             }
                         }
@@ -1046,7 +1063,7 @@ private struct CommandPaletteModePicker: View {
     private func modeButton(_ mode: CommandPaletteMode, enabled: Bool) -> some View {
         let hint = CommandPaletteController.modeHint(for: mode)
         let isSelected = selectedMode == mode
-        return Button(action: { onSelect(mode) }) {
+        return Button(action: { onSelect(mode) }, label: {
             HStack(spacing: 10) {
                 Text(hint.title)
                     .font(.system(size: 12, weight: .semibold))
@@ -1067,7 +1084,7 @@ private struct CommandPaletteModePicker: View {
                     )
             }
             .clipShape(Capsule())
-        }
+        })
         .buttonStyle(.plain)
         .disabled(!enabled)
     }

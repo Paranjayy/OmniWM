@@ -39,7 +39,8 @@ private func makeAXEventOwnedWindow(
 private func makeAXEventTestController(
     windowFocusOperations: WindowFocusOperations? = nil,
     trackedBundleId: String? = nil,
-    workspaceConfigurations: [WorkspaceConfiguration]? = nil
+    workspaceConfigurations: [WorkspaceConfiguration]? = nil,
+    settings: SettingsStore? = nil
 ) -> WMController {
     resetSharedControllerStateForTests()
     let operations = windowFocusOperations ?? WindowFocusOperations(
@@ -47,11 +48,16 @@ private func makeAXEventTestController(
         focusSpecificWindow: { _, _, _ in },
         raiseWindow: { _ in }
     )
-    let settings = SettingsStore(defaults: makeAXEventTestDefaults())
-    settings.workspaceConfigurations = workspaceConfigurations ?? [
-        WorkspaceConfiguration(name: "1", monitorAssignment: .main),
-        WorkspaceConfiguration(name: "2", monitorAssignment: .main)
-    ]
+    let providedSettings = settings != nil
+    let settings = settings ?? SettingsStore(defaults: makeAXEventTestDefaults())
+    if let workspaceConfigurations {
+        settings.workspaceConfigurations = workspaceConfigurations
+    } else if !providedSettings {
+        settings.workspaceConfigurations = [
+            WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+            WorkspaceConfiguration(name: "2", monitorAssignment: .main)
+        ]
+    }
     let controller = WMController(
         settings: settings,
         windowFocusOperations: operations
@@ -141,6 +147,43 @@ private func makeManagedReplacementMetadata(
     )
 }
 
+private func makeAXEventPersistedRestoreCatalog(
+    workspaceName: String,
+    monitor: Monitor,
+    title: String,
+    bundleId: String = "com.example.restore",
+    floatingFrame: CGRect
+) -> PersistedWindowRestoreCatalog {
+    let metadata = ManagedReplacementMetadata(
+        bundleId: bundleId,
+        workspaceId: UUID(),
+        mode: .floating,
+        role: "AXWindow",
+        subrole: "AXStandardWindow",
+        title: title,
+        windowLevel: 0,
+        parentWindowId: 0,
+        frame: nil
+    )
+    let key = PersistedWindowRestoreKey(metadata: metadata)!
+    return PersistedWindowRestoreCatalog(
+        entries: [
+            PersistedWindowRestoreEntry(
+                key: key,
+                restoreIntent: PersistedRestoreIntent(
+                    workspaceName: workspaceName,
+                    topologyProfile: TopologyProfile(monitors: [monitor]),
+                    preferredMonitor: DisplayFingerprint(monitor: monitor),
+                    floatingFrame: floatingFrame,
+                    normalizedFloatingOrigin: CGPoint(x: 0.18, y: 0.16),
+                    restoreToFloating: true,
+                    rescueEligible: true
+                )
+            )
+        ]
+    )
+}
+
 @MainActor
 private func lastAppliedBorderWindowId(on controller: WMController) -> Int? {
     controller.borderManager.lastAppliedFocusedWindowIdForTests
@@ -154,6 +197,37 @@ private func lastAppliedBorderFrame(on controller: WMController) -> CGRect? {
 @MainActor
 private func createFocusTraceEvents(on controller: WMController) -> [NiriCreateFocusTraceEvent] {
     controller.axEventHandler.niriCreateFocusTraceSnapshotForTests()
+}
+
+@MainActor
+private func managedReplacementTraceEvents(
+    on controller: WMController
+) -> [AXEventHandler.ManagedReplacementTraceEvent] {
+    controller.axEventHandler.managedReplacementTraceSnapshotForTests()
+}
+
+@MainActor
+private func structuralManagedReplacementMatchedElapsedMillis(on controller: WMController) -> Int? {
+    managedReplacementTraceEvents(on: controller).compactMap { event -> Int? in
+        guard case let .matched(policy, elapsedMillis) = event.kind,
+              policy == "structural"
+        else {
+            return nil
+        }
+        return elapsedMillis
+    }.last
+}
+
+@MainActor
+private func structuralManagedReplacementFlushElapsedMillis(on controller: WMController) -> [Int] {
+    managedReplacementTraceEvents(on: controller).compactMap { event -> Int? in
+        guard case let .flushed(policy, _, _, _, elapsedMillis) = event.kind,
+              policy == "structural"
+        else {
+            return nil
+        }
+        return elapsedMillis
+    }
 }
 
 @MainActor
@@ -527,7 +601,6 @@ private func waitUntilAXEventTest(
         controller.axEventHandler.handleAppActivation(pid: getpid())
 
         #expect(controller.workspaceManager.focusedHandle == nil)
-        #expect(controller.workspaceManager.isNonManagedFocusActive)
         #expect(controller.workspaceManager.isAppFullscreenActive == false)
     }
 
@@ -957,6 +1030,108 @@ private func waitUntilAXEventTest(
         #expect(controller.workspaceManager.pendingFocusedToken == nil)
     }
 
+    @Test @MainActor func workspaceDidActivateApplicationRevealsManagedWindowOnInactiveWorkspace() {
+        let controller = makeAXEventTestController()
+        controller.hasStartedServices = true
+        guard let workspaceOne = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let workspaceTwo = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
+              let monitor = controller.workspaceManager.monitors.first
+        else {
+            Issue.record("Missing inactive-workspace activation fixture")
+            return
+        }
+
+        let sourceToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 971),
+            pid: 9_701,
+            windowId: 971,
+            to: workspaceOne
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            sourceToken,
+            in: workspaceOne,
+            onMonitor: monitor.id
+        )
+
+        let targetPid: pid_t = 9_702
+        let targetToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 972),
+            pid: targetPid,
+            windowId: 972,
+            to: workspaceTwo
+        )
+        controller.axEventHandler.isFullscreenProvider = { _ in false }
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == targetPid else { return nil }
+            return AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: targetToken.windowId)
+        }
+
+        #expect(controller.activeWorkspace()?.id == workspaceOne)
+        #expect(controller.workspaceManager.focusedToken == nil)
+
+        controller.axEventHandler.handleAppActivation(
+            pid: targetPid,
+            source: .workspaceDidActivateApplication
+        )
+
+        #expect(controller.activeWorkspace()?.id == workspaceTwo)
+        #expect(controller.workspaceManager.focusedToken == targetToken)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.lastFocusedToken(in: workspaceTwo) == targetToken)
+        #expect(controller.workspaceManager.isNonManagedFocusActive == false)
+    }
+
+    @Test @MainActor func cgsFrontAppChangedRevealsManagedWindowOnInactiveWorkspace() {
+        let controller = makeAXEventTestController()
+        controller.hasStartedServices = true
+        guard let workspaceOne = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let workspaceTwo = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
+              let monitor = controller.workspaceManager.monitors.first
+        else {
+            Issue.record("Missing inactive-workspace CGS activation fixture")
+            return
+        }
+
+        let sourceToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 981),
+            pid: 9_801,
+            windowId: 981,
+            to: workspaceOne
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            sourceToken,
+            in: workspaceOne,
+            onMonitor: monitor.id
+        )
+
+        let targetPid: pid_t = 9_802
+        let targetToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 982),
+            pid: targetPid,
+            windowId: 982,
+            to: workspaceTwo
+        )
+        controller.axEventHandler.isFullscreenProvider = { _ in false }
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == targetPid else { return nil }
+            return AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: targetToken.windowId)
+        }
+
+        #expect(controller.activeWorkspace()?.id == workspaceOne)
+        #expect(controller.workspaceManager.focusedToken == nil)
+
+        controller.axEventHandler.handleAppActivation(
+            pid: targetPid,
+            source: .cgsFrontAppChanged
+        )
+
+        #expect(controller.activeWorkspace()?.id == workspaceTwo)
+        #expect(controller.workspaceManager.focusedToken == targetToken)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.lastFocusedToken(in: workspaceTwo) == targetToken)
+        #expect(controller.workspaceManager.isNonManagedFocusActive == false)
+    }
+
     @Test @MainActor func frontingProbeRetriesUntilFocusedWindowMatchesPendingRequest() async {
         var focusedWindows: [(pid_t, UInt32)] = []
         let operations = WindowFocusOperations(
@@ -1030,6 +1205,238 @@ private func waitUntilAXEventTest(
 
         #expect(controller.workspaceManager.focusedToken == targetToken)
         #expect(controller.workspaceManager.pendingFocusedToken == nil)
+    }
+
+    @Test @MainActor func externalFocusedWindowChangeCancelsConflictingPendingRequestAndAdoptsObservedManagedWindow() {
+        let controller = makeAXEventTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing managed activation fixture")
+            return
+        }
+
+        controller.hasStartedServices = true
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 973),
+            pid: getpid(),
+            windowId: 973,
+            to: workspaceId
+        )
+        let pendingToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 974),
+            pid: getpid(),
+            windowId: 974,
+            to: workspaceId
+        )
+        let observedToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 975),
+            pid: getpid(),
+            windowId: 975,
+            to: workspaceId
+        )
+
+        _ = controller.workspaceManager.setManagedFocus(
+            oldToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.workspaceManager.beginManagedFocusRequest(
+            pendingToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.focusBridge.beginManagedRequest(
+            token: pendingToken,
+            workspaceId: workspaceId
+        )
+        controller.focusBridge.setFocusedTarget(
+            controller.keyboardFocusTarget(
+                for: oldToken,
+                axRef: AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: oldToken.windowId)
+            )
+        )
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == getpid() else { return nil }
+            return AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: observedToken.windowId)
+        }
+
+        controller.axEventHandler.handleAppActivation(
+            pid: getpid(),
+            source: .focusedWindowChanged
+        )
+
+        let trace = createFocusTraceEvents(on: controller)
+        #expect(controller.focusBridge.activeManagedRequest == nil)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.focusedToken == observedToken)
+        #expect(controller.focusBridge.focusedTarget?.token == observedToken)
+        #expect(!trace.contains { event in
+            if case let .activationDeferred(_, token, source, reason, _) = event.kind {
+                return token == pendingToken &&
+                    source == .focusedWindowChanged &&
+                    reason == .pendingFocusMismatch
+            }
+            return false
+        })
+        #expect(trace.contains { event in
+            if case let .focusConfirmed(token, confirmedWorkspaceId, source) = event.kind {
+                return token == observedToken &&
+                    confirmedWorkspaceId == workspaceId &&
+                    source == .focusedWindowChanged
+            }
+            return false
+        })
+    }
+
+    @Test @MainActor func externalFocusedWindowChangeWithNoObservedWindowCancelsPendingRequestAndFallsBackToNonManaged() {
+        let controller = makeAXEventTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing missing-window fallback fixture")
+            return
+        }
+
+        controller.hasStartedServices = true
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 976),
+            pid: getpid(),
+            windowId: 976,
+            to: workspaceId
+        )
+        let pendingToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 977),
+            pid: getpid(),
+            windowId: 977,
+            to: workspaceId
+        )
+
+        _ = controller.workspaceManager.setManagedFocus(
+            oldToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.workspaceManager.beginManagedFocusRequest(
+            pendingToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.focusBridge.beginManagedRequest(
+            token: pendingToken,
+            workspaceId: workspaceId
+        )
+        controller.focusBridge.setFocusedTarget(
+            controller.keyboardFocusTarget(
+                for: oldToken,
+                axRef: AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: oldToken.windowId)
+            )
+        )
+        controller.axEventHandler.focusedWindowRefProvider = { _ in nil }
+
+        controller.axEventHandler.handleAppActivation(
+            pid: getpid(),
+            source: .focusedWindowChanged
+        )
+
+        let trace = createFocusTraceEvents(on: controller)
+        #expect(controller.focusBridge.activeManagedRequest == nil)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.isNonManagedFocusActive)
+        #expect(controller.focusBridge.focusedTarget == nil)
+        #expect(!trace.contains { event in
+            if case let .activationDeferred(_, token, source, reason, _) = event.kind {
+                return token == pendingToken &&
+                    source == .focusedWindowChanged &&
+                    reason == .missingFocusedWindow
+            }
+            return false
+        })
+        #expect(trace.contains { event in
+            if case let .nonManagedFallbackEntered(pid, source) = event.kind {
+                return pid == getpid() && source == .focusedWindowChanged
+            }
+            return false
+        })
+    }
+
+    @Test @MainActor func externalFocusedWindowChangeWithObservedUnmanagedWindowCancelsPendingRequestAndFallsBackToNonManaged() {
+        let controller = makeAXEventTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing unmanaged-window fallback fixture")
+            return
+        }
+
+        controller.hasStartedServices = true
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 978),
+            pid: getpid(),
+            windowId: 978,
+            to: workspaceId
+        )
+        let pendingToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 979),
+            pid: getpid(),
+            windowId: 979,
+            to: workspaceId
+        )
+        let observedToken = WindowToken(pid: getpid(), windowId: 980)
+
+        _ = controller.workspaceManager.setManagedFocus(
+            oldToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.workspaceManager.beginManagedFocusRequest(
+            pendingToken,
+            in: workspaceId,
+            onMonitor: monitor.id
+        )
+        _ = controller.focusBridge.beginManagedRequest(
+            token: pendingToken,
+            workspaceId: workspaceId
+        )
+        controller.focusBridge.setFocusedTarget(
+            controller.keyboardFocusTarget(
+                for: oldToken,
+                axRef: AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: oldToken.windowId)
+            )
+        )
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == getpid() else { return nil }
+            return AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: observedToken.windowId)
+        }
+
+        controller.axEventHandler.handleAppActivation(
+            pid: getpid(),
+            source: .focusedWindowChanged
+        )
+
+        let trace = createFocusTraceEvents(on: controller)
+        #expect(controller.focusBridge.activeManagedRequest == nil)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.isNonManagedFocusActive)
+        #expect(controller.focusBridge.focusedTarget?.token == observedToken)
+        #expect(controller.focusBridge.focusedTarget?.isManaged == false)
+        #expect(!trace.contains { event in
+            if case let .activationDeferred(_, token, source, reason, _) = event.kind {
+                return token == pendingToken &&
+                    source == .focusedWindowChanged &&
+                    reason == .pendingFocusUnmanagedToken
+            }
+            return false
+        })
+        #expect(trace.contains { event in
+            if case let .nonManagedFallbackEntered(pid, source) = event.kind {
+                return pid == getpid() && source == .focusedWindowChanged
+            }
+            return false
+        })
     }
 
     @Test @MainActor func activationRetryExhaustionClearsPendingFocusAndRestoresConfirmedBorder() async throws {
@@ -1554,6 +1961,76 @@ private func waitUntilAXEventTest(
         #expect(controller.workspaceManager.layoutReason(for: replacementToken) == .standard)
     }
 
+    @Test @MainActor func workspaceDidActivateApplicationRevealsRestoredManagedWindowOnInactiveWorkspace() {
+        let controller = makeAXEventTestController()
+        controller.hasStartedServices = true
+        guard let workspaceOne = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let workspaceTwo = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
+              let monitor = controller.workspaceManager.monitors.first
+        else {
+            Issue.record("Missing restored inactive-workspace activation fixture")
+            return
+        }
+
+        let sourceToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 983),
+            pid: 9_803,
+            windowId: 983,
+            to: workspaceOne
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            sourceToken,
+            in: workspaceOne,
+            onMonitor: monitor.id
+        )
+
+        let targetPid: pid_t = 9_804
+        let originalToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 984),
+            pid: targetPid,
+            windowId: 984,
+            to: workspaceTwo
+        )
+        guard let originalEntry = controller.workspaceManager.entry(for: originalToken) else {
+            Issue.record("Missing original restored-entry fixture")
+            return
+        }
+
+        _ = controller.workspaceManager.requestNativeFullscreenEnter(originalToken, in: workspaceTwo)
+        _ = controller.workspaceManager.markNativeFullscreenSuspended(originalToken)
+        controller.axEventHandler.handleRemoved(token: originalToken)
+
+        let replacementToken = WindowToken(pid: targetPid, windowId: 985)
+        controller.axEventHandler.isFullscreenProvider = { _ in false }
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == targetPid else { return nil }
+            return AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: replacementToken.windowId)
+        }
+
+        #expect(controller.activeWorkspace()?.id == workspaceOne)
+        #expect(controller.workspaceManager.focusedToken == nil)
+
+        controller.axEventHandler.handleAppActivation(
+            pid: targetPid,
+            source: .workspaceDidActivateApplication
+        )
+
+        guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken) else {
+            Issue.record("Missing replacement entry after restored activation")
+            return
+        }
+
+        #expect(controller.activeWorkspace()?.id == workspaceTwo)
+        #expect(controller.workspaceManager.focusedToken == replacementToken)
+        #expect(controller.workspaceManager.pendingFocusedToken == nil)
+        #expect(controller.workspaceManager.lastFocusedToken(in: workspaceTwo) == replacementToken)
+        #expect(controller.workspaceManager.isNonManagedFocusActive == false)
+        #expect(controller.workspaceManager.entry(for: originalToken) == nil)
+        #expect(replacementEntry.handle === originalEntry.handle)
+        #expect(controller.workspaceManager.nativeFullscreenRecord(for: replacementToken) == nil)
+        #expect(controller.workspaceManager.layoutReason(for: replacementToken) == .standard)
+    }
+
     @Test @MainActor func nativeFullscreenCommandRoundTripsThroughObservedStateTransitions() {
         let controller = makeAXEventTestController()
         guard let workspaceId = controller.activeWorkspace()?.id else {
@@ -1959,8 +2436,8 @@ private func waitUntilAXEventTest(
         )
         controller.layoutRefreshController.layoutState.isFullEnumerationInProgress = false
 
-        await controller.axEventHandler.drainDeferredCreatedWindows()
-        await controller.axEventHandler.drainDeferredCreatedWindows()
+        controller.axEventHandler.drainDeferredCreatedWindows()
+        controller.axEventHandler.drainDeferredCreatedWindows()
 
         #expect(controller.workspaceManager.entry(forPid: getpid(), windowId: 821)?.workspaceId == workspaceId)
         #expect(controller.workspaceManager.allEntries().filter { $0.windowId == 821 }.count == 1)
@@ -2281,6 +2758,7 @@ private func waitUntilAXEventTest(
         let oldNode = engine.addWindow(token: oldToken, to: workspaceId, afterSelection: nil, focusedToken: oldToken)
 
         var relayoutReasons: [RefreshReason] = []
+        var factLookupWindowIds: [Int] = []
         controller.layoutRefreshController.resetDebugState()
         controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
             relayoutReasons.append(reason)
@@ -2300,9 +2778,10 @@ private func waitUntilAXEventTest(
             AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
         }
         controller.axEventHandler.windowFactsProvider = { axRef, _ in
+            factLookupWindowIds.append(axRef.windowId)
             switch axRef.windowId {
             case 855:
-                makeAXEventWindowRuleFacts(
+                return makeAXEventWindowRuleFacts(
                     bundleId: currentTestBundleId(),
                     title: nil,
                     role: nil,
@@ -2311,13 +2790,13 @@ private func waitUntilAXEventTest(
                     windowServer: oldInfo
                 )
             case 856:
-                makeAXEventWindowRuleFacts(
+                return makeAXEventWindowRuleFacts(
                     bundleId: currentTestBundleId(),
                     title: replacementInfo.title,
                     windowServer: replacementInfo
                 )
             default:
-                makeAXEventWindowRuleFacts(bundleId: currentTestBundleId())
+                return makeAXEventWindowRuleFacts(bundleId: currentTestBundleId())
             }
         }
 
@@ -2342,6 +2821,382 @@ private func waitUntilAXEventTest(
         #expect(replacementEntry.handle === oldEntry.handle)
         #expect(engine.findNode(for: replacementToken)?.id == oldNode.id)
         #expect(relayoutReasons.isEmpty)
+        #expect(factLookupWindowIds.contains(856))
+        #expect(!factLookupWindowIds.contains(855))
+    }
+
+    @Test @MainActor func structuralReplacementDestroyThenCreateFlushesWithinSingleGraceWindow() async {
+        let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let oldInfo = makeAXEventWindowInfo(
+            id: 878,
+            title: "repo - shell",
+            frame: CGRect(x: 96, y: 88, width: 920, height: 660),
+            parentId: 101
+        )
+        let replacementInfo = makeAXEventWindowInfo(
+            id: 879,
+            title: "repo - shell (retabbed)",
+            frame: oldInfo.frame,
+            parentId: 101
+        )
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 878),
+            pid: getpid(),
+            windowId: 878,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: oldInfo.title,
+                windowServer: oldInfo
+            )
+        )
+        guard let oldEntry = controller.workspaceManager.entry(for: oldToken) else {
+            Issue.record("Missing original Ghostty entry")
+            return
+        }
+
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            switch windowId {
+            case 878:
+                oldInfo
+            case 879:
+                replacementInfo
+            default:
+                nil
+            }
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { axRef, _ in
+            let info: WindowServerInfo = switch axRef.windowId {
+            case 878:
+                oldInfo
+            case 879:
+                replacementInfo
+            default:
+                makeAXEventWindowInfo(id: UInt32(axRef.windowId))
+            }
+            return makeAXEventWindowRuleFacts(
+                bundleId: currentTestBundleId(),
+                title: info.title,
+                windowServer: info
+            )
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 878, spaceId: 0)
+        )
+        try? await Task.sleep(for: .milliseconds(60))
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 879, spaceId: 0)
+        )
+
+        let replacementToken = WindowToken(pid: getpid(), windowId: 879)
+        await waitUntilAXEventTest(iterations: 120) {
+            controller.workspaceManager.entry(for: replacementToken) != nil
+        }
+
+        guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken) else {
+            Issue.record("Missing replacement Ghostty entry after timed flush")
+            return
+        }
+
+        #expect(controller.workspaceManager.entry(for: oldToken) == nil)
+        #expect(replacementEntry.handle === oldEntry.handle)
+        let matchedElapsedMillis = structuralManagedReplacementMatchedElapsedMillis(on: controller) ?? .max
+        #expect(matchedElapsedMillis >= 130)
+        #expect(matchedElapsedMillis < 200)
+    }
+
+    @Test @MainActor func structuralReplacementCreateBeforeDestroyStillRekeysWithinSingleGraceWindow() async {
+        let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let oldInfo = makeAXEventWindowInfo(
+            id: 880,
+            title: "repo - shell",
+            frame: CGRect(x: 96, y: 88, width: 920, height: 660),
+            parentId: 103
+        )
+        let replacementInfo = makeAXEventWindowInfo(
+            id: 881,
+            title: "repo - shell (new tab)",
+            frame: oldInfo.frame,
+            parentId: 103
+        )
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 880),
+            pid: getpid(),
+            windowId: 880,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: oldInfo.title,
+                windowServer: oldInfo
+            )
+        )
+        guard let oldEntry = controller.workspaceManager.entry(for: oldToken) else {
+            Issue.record("Missing original Ghostty entry")
+            return
+        }
+
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            switch windowId {
+            case 880:
+                oldInfo
+            case 881:
+                replacementInfo
+            default:
+                nil
+            }
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { axRef, _ in
+            let info: WindowServerInfo = switch axRef.windowId {
+            case 880:
+                oldInfo
+            case 881:
+                replacementInfo
+            default:
+                makeAXEventWindowInfo(id: UInt32(axRef.windowId))
+            }
+            return makeAXEventWindowRuleFacts(
+                bundleId: currentTestBundleId(),
+                title: info.title,
+                windowServer: info
+            )
+        }
+
+        let replacementToken = WindowToken(pid: getpid(), windowId: 881)
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 881, spaceId: 0)
+        )
+
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(controller.workspaceManager.entry(for: replacementToken) == nil)
+
+        try? await Task.sleep(for: .milliseconds(40))
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 880, spaceId: 0)
+        )
+
+        await waitUntilAXEventTest(iterations: 120) {
+            controller.workspaceManager.entry(for: replacementToken) != nil
+        }
+
+        guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken) else {
+            Issue.record("Missing replacement Ghostty entry after create-before-destroy burst")
+            return
+        }
+
+        #expect(controller.workspaceManager.entry(for: oldToken) == nil)
+        #expect(replacementEntry.handle === oldEntry.handle)
+        let matchedElapsedMillis = structuralManagedReplacementMatchedElapsedMillis(on: controller) ?? .max
+        #expect(matchedElapsedMillis >= 130)
+        #expect(matchedElapsedMillis < 200)
+    }
+
+    @Test @MainActor func structuralReplacementUnmatchedDestroyUsesSingleGraceWindowBeforeRemoval() async {
+        let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let oldInfo = makeAXEventWindowInfo(
+            id: 882,
+            title: "repo - shell",
+            frame: CGRect(x: 96, y: 88, width: 920, height: 660),
+            parentId: 105
+        )
+        let token = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 882),
+            pid: getpid(),
+            windowId: 882,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: oldInfo.title,
+                windowServer: oldInfo
+            )
+        )
+
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            guard windowId == 882 else { return nil }
+            return oldInfo
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 882, spaceId: 0)
+        )
+
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(controller.workspaceManager.entry(for: token) != nil)
+
+        await waitUntilAXEventTest(iterations: 120) {
+            controller.workspaceManager.entry(for: token) == nil
+        }
+
+        let flushElapsedMillis = structuralManagedReplacementFlushElapsedMillis(on: controller)
+        #expect(controller.workspaceManager.entry(for: token) == nil)
+        #expect(flushElapsedMillis.count == 1)
+        #expect((flushElapsedMillis.first ?? 0) >= 130)
+    }
+
+    @Test @MainActor func structuralReplacementAmbiguousMultiCreateBurstFlushesWithoutRekeying() async {
+        let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let oldInfo = makeAXEventWindowInfo(
+            id: 883,
+            title: "repo - shell",
+            frame: CGRect(x: 80, y: 80, width: 900, height: 640),
+            parentId: 107
+        )
+        let siblingInfo = makeAXEventWindowInfo(
+            id: 884,
+            title: "repo - shell sibling",
+            frame: CGRect(x: 220, y: 120, width: 900, height: 640),
+            parentId: 108
+        )
+        let firstReplacementInfo = makeAXEventWindowInfo(
+            id: 885,
+            title: "repo - shell (candidate 1)",
+            frame: oldInfo.frame,
+            parentId: 107
+        )
+        let secondReplacementInfo = makeAXEventWindowInfo(
+            id: 886,
+            title: "repo - shell (candidate 2)",
+            frame: oldInfo.frame,
+            parentId: 107
+        )
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 883),
+            pid: getpid(),
+            windowId: 883,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: oldInfo.title,
+                windowServer: oldInfo
+            )
+        )
+        let siblingToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 884),
+            pid: getpid(),
+            windowId: 884,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: siblingInfo.title,
+                windowServer: siblingInfo
+            )
+        )
+        guard let oldEntry = controller.workspaceManager.entry(for: oldToken),
+              let siblingEntry = controller.workspaceManager.entry(for: siblingToken) else {
+            Issue.record("Missing original Ghostty entries")
+            return
+        }
+
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            switch windowId {
+            case 883:
+                oldInfo
+            case 884:
+                siblingInfo
+            case 885:
+                firstReplacementInfo
+            case 886:
+                secondReplacementInfo
+            default:
+                nil
+            }
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { axRef, _ in
+            let info: WindowServerInfo = switch axRef.windowId {
+            case 883:
+                oldInfo
+            case 884:
+                siblingInfo
+            case 885:
+                firstReplacementInfo
+            case 886:
+                secondReplacementInfo
+            default:
+                makeAXEventWindowInfo(id: UInt32(axRef.windowId))
+            }
+            return makeAXEventWindowRuleFacts(
+                bundleId: currentTestBundleId(),
+                title: info.title,
+                windowServer: info
+            )
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 883, spaceId: 0)
+        )
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 885, spaceId: 0)
+        )
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 886, spaceId: 0)
+        )
+
+        await waitUntilAXEventTest(iterations: 120) {
+            controller.workspaceManager.entry(for: oldToken) == nil
+                && controller.workspaceManager.entry(forPid: getpid(), windowId: 885) != nil
+                && controller.workspaceManager.entry(forPid: getpid(), windowId: 886) != nil
+        }
+
+        guard let firstNewEntry = controller.workspaceManager.entry(forPid: getpid(), windowId: 885),
+              let secondNewEntry = controller.workspaceManager.entry(forPid: getpid(), windowId: 886),
+              let siblingCurrentEntry = controller.workspaceManager.entry(for: siblingToken)
+        else {
+            Issue.record("Missing replayed Ghostty entries for timed ambiguous burst")
+            return
+        }
+
+        #expect(controller.workspaceManager.entry(for: oldToken) == nil)
+        #expect(siblingCurrentEntry.handle === siblingEntry.handle)
+        #expect(firstNewEntry.handle !== oldEntry.handle)
+        #expect(firstNewEntry.handle !== siblingEntry.handle)
+        #expect(secondNewEntry.handle !== oldEntry.handle)
+        #expect(secondNewEntry.handle !== siblingEntry.handle)
+        #expect(structuralManagedReplacementMatchedElapsedMillis(on: controller) == nil)
+        let flushElapsedMillis = structuralManagedReplacementFlushElapsedMillis(on: controller)
+        #expect((flushElapsedMillis.last ?? 0) >= 130)
+        #expect((flushElapsedMillis.last ?? .max) < 200)
     }
 
     @Test @MainActor func ghosttyReplacementKeepsDwindleLeafAndRightNeighborStable() async {
@@ -2501,7 +3356,7 @@ private func waitUntilAXEventTest(
         #expect(relayoutReasons.isEmpty)
     }
 
-    @Test @MainActor func ghosttyCloseTabLateCreateKeepsNiriNodeAndRightColumnStable() async {
+    @Test @MainActor func structuralReplacementLateCreateWithinGraceKeepsNiriNodeAndRightColumnStable() async {
         let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
         guard let workspaceId = controller.activeWorkspace()?.id,
               let monitor = controller.workspaceManager.monitors.first else {
@@ -2626,7 +3481,7 @@ private func waitUntilAXEventTest(
             CGSEventObserver.shared,
             didReceive: .destroyed(windowId: 865, spaceId: 0)
         )
-        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
+        try? await Task.sleep(for: .milliseconds(60))
 
         #expect(controller.workspaceManager.entry(for: oldToken) != nil)
         #expect(engine.findNode(for: oldToken)?.id == oldNode.id)
@@ -2635,10 +3490,12 @@ private func waitUntilAXEventTest(
             CGSEventObserver.shared,
             didReceive: .created(windowId: 867, spaceId: 0)
         )
-        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
+        let replacementToken = WindowToken(pid: getpid(), windowId: 867)
+        await waitUntilAXEventTest(iterations: 240) {
+            controller.workspaceManager.entry(for: replacementToken) != nil
+        }
         await controller.layoutRefreshController.waitForRefreshWorkForTests()
 
-        let replacementToken = WindowToken(pid: getpid(), windowId: 867)
         guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken),
               let replacementNode = engine.findNode(for: replacementToken),
               let rightNode = engine.findNode(for: rightToken)
@@ -2669,7 +3526,7 @@ private func waitUntilAXEventTest(
         #expect(controller.workspaceManager.niriViewportState(for: workspaceId).selectedNodeId == oldNode.id)
     }
 
-    @Test @MainActor func ghosttyCloseTabLateCreateKeepsDwindleLeafAndRightNeighborStable() async {
+    @Test @MainActor func structuralReplacementLateCreateWithinGraceKeepsDwindleLeafAndRightNeighborStable() async {
         let controller = makeAXEventTestController(
             trackedBundleId: currentTestBundleId(),
             workspaceConfigurations: [
@@ -2802,7 +3659,7 @@ private func waitUntilAXEventTest(
             CGSEventObserver.shared,
             didReceive: .destroyed(windowId: 870, spaceId: 0)
         )
-        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
+        try? await Task.sleep(for: .milliseconds(60))
 
         #expect(controller.workspaceManager.entry(for: oldToken) != nil)
         #expect(engine.findNode(for: oldToken)?.id == originalGhosttyLeaf.id)
@@ -2811,10 +3668,12 @@ private func waitUntilAXEventTest(
             CGSEventObserver.shared,
             didReceive: .created(windowId: 872, spaceId: 0)
         )
-        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
+        let replacementToken = WindowToken(pid: getpid(), windowId: 872)
+        await waitUntilAXEventTest(iterations: 240) {
+            controller.workspaceManager.entry(for: replacementToken) != nil
+        }
         await controller.layoutRefreshController.waitForRefreshWorkForTests()
 
-        let replacementToken = WindowToken(pid: getpid(), windowId: 872)
         guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken),
               let replacementLeaf = engine.findNode(for: replacementToken),
               let updatedRightLeaf = engine.findNode(for: rightToken) else {
@@ -3166,6 +4025,172 @@ private func waitUntilAXEventTest(
         #expect(engine.columns(in: workspaceId).count == 2)
     }
 
+    @Test @MainActor func structuralReplacementRekeysUnlistedAppWithoutAllowlist() async {
+        let bundleId = "com.example.native-tabs"
+        let controller = makeAXEventTestController(trackedBundleId: bundleId)
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        guard let engine = controller.niriEngine else {
+            Issue.record("Missing Niri engine")
+            return
+        }
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 890),
+            pid: getpid(),
+            windowId: 890,
+            to: workspaceId
+        )
+        guard let oldEntry = controller.workspaceManager.entry(for: oldToken) else {
+            Issue.record("Missing original unlisted-app entry")
+            return
+        }
+
+        let oldNode = engine.addWindow(token: oldToken, to: workspaceId, afterSelection: nil, focusedToken: oldToken)
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = oldNode.id
+            state.activeColumnIndex = 0
+        }
+
+        let oldInfo = makeAXEventWindowInfo(
+            id: 890,
+            title: "Inbox",
+            frame: CGRect(x: 80, y: 80, width: 900, height: 640),
+            parentId: 121
+        )
+        let replacementInfo = makeAXEventWindowInfo(
+            id: 891,
+            title: "Inbox (2)",
+            frame: oldInfo.frame,
+            parentId: 121
+        )
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            switch windowId {
+            case 890:
+                oldInfo
+            case 891:
+                replacementInfo
+            default:
+                nil
+            }
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { axRef, _ in
+            let info: WindowServerInfo = switch axRef.windowId {
+            case 890:
+                oldInfo
+            case 891:
+                replacementInfo
+            default:
+                makeAXEventWindowInfo(id: UInt32(axRef.windowId))
+            }
+            return makeAXEventWindowRuleFacts(
+                bundleId: bundleId,
+                title: info.title,
+                windowServer: info
+            )
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 890, spaceId: 0)
+        )
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 891, spaceId: 0)
+        )
+        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let replacementToken = WindowToken(pid: getpid(), windowId: 891)
+        guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken) else {
+            Issue.record("Missing replacement entry for unlisted native-tab app")
+            return
+        }
+
+        #expect(controller.workspaceManager.entry(for: oldToken) == nil)
+        #expect(replacementEntry.handle === oldEntry.handle)
+        #expect(engine.findNode(for: oldToken) == nil)
+        #expect(engine.findNode(for: replacementToken)?.id == oldNode.id)
+    }
+
+    @Test @MainActor func structuralReplacementDoesNotRekeyWhenOnlyTitleMatches() async {
+        let bundleId = "com.example.title-only"
+        let controller = makeAXEventTestController(trackedBundleId: bundleId)
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 892),
+            pid: getpid(),
+            windowId: 892,
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: bundleId,
+                workspaceId: workspaceId,
+                title: "Inbox",
+                windowServer: nil
+            )
+        )
+        guard let oldEntry = controller.workspaceManager.entry(for: oldToken) else {
+            Issue.record("Missing weak-metadata source entry")
+            return
+        }
+
+        let replacementInfo = makeAXEventWindowInfo(
+            id: 893,
+            title: "Inbox",
+            frame: CGRect(x: 360, y: 220, width: 800, height: 600)
+        )
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            windowId == 893 ? replacementInfo : nil
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { _, _ in
+            makeAXEventWindowRuleFacts(
+                bundleId: bundleId,
+                title: "Inbox",
+                windowServer: nil
+            )
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .destroyed(windowId: 892, spaceId: 0)
+        )
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 893, spaceId: 0)
+        )
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let replacementToken = WindowToken(pid: getpid(), windowId: 893)
+        await waitUntilAXEventTest(iterations: 120) {
+            controller.workspaceManager.entry(for: oldToken) == nil
+                && controller.workspaceManager.entry(for: replacementToken) != nil
+        }
+
+        guard let replacementEntry = controller.workspaceManager.entry(for: replacementToken) else {
+            Issue.record("Missing replacement entry for weak-metadata test")
+            return
+        }
+
+        #expect(replacementEntry.handle !== oldEntry.handle)
+        #expect(structuralManagedReplacementMatchedElapsedMillis(on: controller) == nil)
+        #expect(managedReplacementTraceEvents(on: controller).isEmpty)
+    }
+
     @Test @MainActor func samePidCreateDoesNotStealAwaitingNativeFullscreenReplacementFromDifferentWorkspace() {
         let controller = makeAXEventTestController()
         defer { controller.axEventHandler.resetDebugStateForTests() }
@@ -3236,32 +4261,40 @@ private func waitUntilAXEventTest(
         #expect(controller.workspaceManager.layoutReason(for: suspendedToken2) == .nativeFullscreen)
     }
 
-    @Test @MainActor func unmatchedGhosttyDestroyRemovesAfterSecondFlushWindow() {
+    @Test @MainActor func unmatchedStructuralDestroyRemovesAfterSingleFlushWindow() {
         let controller = makeAXEventTestController(trackedBundleId: currentTestBundleId())
         guard let workspaceId = controller.activeWorkspace()?.id else {
             Issue.record("Missing active workspace")
             return
         }
 
+        let oldInfo = makeAXEventWindowInfo(
+            id: 843,
+            title: "repo - shell",
+            frame: CGRect(x: 96, y: 88, width: 920, height: 660),
+            parentId: 131
+        )
         let token = controller.workspaceManager.addWindow(
             AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 843),
             pid: getpid(),
             windowId: 843,
-            to: workspaceId
+            to: workspaceId,
+            managedReplacementMetadata: makeManagedReplacementMetadata(
+                bundleId: currentTestBundleId(),
+                workspaceId: workspaceId,
+                title: oldInfo.title,
+                windowServer: oldInfo
+            )
         )
         controller.axEventHandler.windowInfoProvider = { windowId in
             guard windowId == 843 else { return nil }
-            return WindowServerInfo(id: windowId, pid: getpid(), level: 0, frame: .zero)
+            return oldInfo
         }
 
         controller.axEventHandler.cgsEventObserver(
             CGSEventObserver.shared,
             didReceive: .destroyed(windowId: 843, spaceId: 0)
         )
-
-        #expect(controller.workspaceManager.entry(for: token) != nil)
-
-        controller.axEventHandler.flushPendingManagedReplacementEventsForTests()
 
         #expect(controller.workspaceManager.entry(for: token) != nil)
 
@@ -3431,6 +4464,91 @@ private func waitUntilAXEventTest(
         #expect(entry.workspaceId == workspaceId)
         #expect(entry.mode == .floating)
         #expect(secondaryMonitor.visibleFrame.contains(appliedFrame.center))
+    }
+
+    @Test @MainActor func floatingCreatedWindowUsesHydratedWorkspaceAndPersistedRestoreFrame() async throws {
+        let bundleId = "com.example.restore"
+        let settings = SettingsStore(defaults: makeAXEventTestDefaults())
+        settings.workspaceConfigurations = [
+            WorkspaceConfiguration(name: "1", monitorAssignment: .main),
+            WorkspaceConfiguration(name: "6", monitorAssignment: .secondary)
+        ]
+        let primaryMonitor = makeAXEventTestMonitor()
+        let secondaryMonitor = makeAXEventSecondaryMonitor()
+        let expectedFrame = CGRect(
+            x: secondaryMonitor.visibleFrame.minX + 260,
+            y: secondaryMonitor.visibleFrame.minY + 180,
+            width: 480,
+            height: 320
+        )
+        let catalog = makeAXEventPersistedRestoreCatalog(
+            workspaceName: "6",
+            monitor: secondaryMonitor,
+            title: "Hydrated Restore",
+            bundleId: bundleId,
+            floatingFrame: expectedFrame
+        )
+        settings.savePersistedWindowRestoreCatalog(catalog)
+
+        let controller = makeAXEventTestController(
+            trackedBundleId: bundleId,
+            settings: settings
+        )
+        controller.workspaceManager.applyMonitorConfigurationChange([primaryMonitor, secondaryMonitor])
+        controller.windowRuleEngine.rebuild(
+            rules: [
+                AppRule(bundleId: bundleId, assignToWorkspace: "1")
+            ]
+        )
+        let primaryWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "1", createIfMissing: false))
+        let secondaryWorkspaceId = try #require(controller.workspaceManager.workspaceId(for: "6", createIfMissing: false))
+        #expect(controller.workspaceManager.setActiveWorkspace(primaryWorkspaceId, on: primaryMonitor.id))
+        #expect(controller.workspaceManager.setActiveWorkspace(secondaryWorkspaceId, on: secondaryMonitor.id))
+        installSynchronousFrameApplySuccessOverride(on: controller)
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            WindowServerInfo(id: windowId, pid: getpid(), level: 0, frame: .zero)
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.frameProvider = { _ in
+            CGRect(x: 120, y: 160, width: 420, height: 300)
+        }
+        controller.axEventHandler.windowFactsProvider = { _, _ in
+            makeAXEventWindowRuleFacts(
+                bundleId: bundleId,
+                title: "Hydrated Restore"
+            )
+        }
+        defer { controller.axEventHandler.frameProvider = nil }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 826, spaceId: 0)
+        )
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        await waitUntilAXEventTest {
+            controller.workspaceManager.entry(forPid: getpid(), windowId: 826) != nil
+                && controller.axManager.lastAppliedFrame(for: 826) != nil
+        }
+
+        guard let entry = controller.workspaceManager.entry(forPid: getpid(), windowId: 826),
+              let appliedFrame = controller.axManager.lastAppliedFrame(for: 826)
+        else {
+            if let entry = controller.workspaceManager.entry(forPid: getpid(), windowId: 826) {
+                Issue.record(
+                    "Hydrated entry present mode=\(entry.mode) workspace=\(entry.workspaceId.uuidString) metadata=\(String(describing: entry.managedReplacementMetadata)) resolved=\(String(describing: controller.workspaceManager.resolvedFloatingFrame(for: entry.token, preferredMonitor: secondaryMonitor))) applied=\(String(describing: controller.axManager.lastAppliedFrame(for: 826)))"
+                )
+            }
+            Issue.record("Expected hydrated floating restore entry")
+            return
+        }
+
+        #expect(entry.workspaceId == secondaryWorkspaceId)
+        #expect(entry.mode == .floating)
+        #expect(appliedFrame == expectedFrame)
+        #expect(controller.workspaceManager.resolvedFloatingFrame(for: entry.token, preferredMonitor: secondaryMonitor) == expectedFrame)
+        #expect(controller.workspaceManager.consumedBootPersistedWindowRestoreKeysForTests().contains(catalog.entries[0].key))
     }
 
     @Test @MainActor func activeFloatingCreateRetriesFrameApplyAfterContextUnavailable() async {
@@ -3673,6 +4791,62 @@ private func waitUntilAXEventTest(
         #expect(entry.workspaceId == workspaceId)
         #expect(entry.ruleEffects.minWidth == 880)
         #expect(entry.ruleEffects.minHeight == 640)
+        #expect(relayoutReasons == [.axWindowCreated])
+    }
+
+    @Test @MainActor func builtInFloatingCreatePreservesUserWorkspaceAssignmentAndRuleEffects() async {
+        let controller = makeAXEventTestController(trackedBundleId: "com.apple.calculator")
+        controller.windowRuleEngine.rebuild(
+            rules: [
+                AppRule(
+                    id: UUID(uuidString: "00000000-0000-0000-0000-000000000164")!,
+                    bundleId: "com.apple.calculator",
+                    assignToWorkspace: "2",
+                    minWidth: 510,
+                    minHeight: 410
+                )
+            ]
+        )
+
+        var relayoutReasons: [RefreshReason] = []
+        controller.axEventHandler.windowInfoProvider = { windowId in
+            WindowServerInfo(id: windowId, pid: getpid(), level: 0, frame: .zero)
+        }
+        controller.axEventHandler.axWindowRefProvider = { windowId, _ in
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: Int(windowId))
+        }
+        controller.axEventHandler.windowFactsProvider = { _, _ in
+            makeAXEventWindowRuleFacts(
+                bundleId: "com.apple.calculator",
+                appName: "Calculator",
+                title: "Calculator"
+            )
+        }
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
+            relayoutReasons.append(reason)
+            return true
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .created(windowId: 824, spaceId: 0)
+        )
+        await waitUntilAXEventTest {
+            controller.workspaceManager.entry(forPid: getpid(), windowId: 824) != nil &&
+                relayoutReasons == [.axWindowCreated]
+        }
+
+        guard let workspaceId = controller.workspaceManager.workspaceId(for: "2", createIfMissing: false),
+              let entry = controller.workspaceManager.entry(forPid: getpid(), windowId: 824)
+        else {
+            Issue.record("Missing managed Calculator entry for built-in floating rule test")
+            return
+        }
+
+        #expect(entry.workspaceId == workspaceId)
+        #expect(entry.mode == .floating)
+        #expect(entry.ruleEffects.minWidth == 510)
+        #expect(entry.ruleEffects.minHeight == 410)
         #expect(relayoutReasons == [.axWindowCreated])
     }
 

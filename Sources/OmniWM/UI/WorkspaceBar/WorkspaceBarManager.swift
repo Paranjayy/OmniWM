@@ -93,8 +93,11 @@ final class WorkspaceBarManager {
     private var pendingReconfigureTask: Task<Void, Never>?
     private weak var controller: WMController?
     private weak var settings: SettingsStore?
+    private let motionPolicy: MotionPolicy
+    private let surfaceCoordinator = SurfaceCoordinator.shared
 
-    init() {
+    init(motionPolicy: MotionPolicy) {
+        self.motionPolicy = motionPolicy
         setupScreenChangeObserver()
         setupSleepWakeObserver()
     }
@@ -193,6 +196,7 @@ final class WorkspaceBarManager {
         let hostingView = NSHostingView(
             rootView: WorkspaceBarView(
                 model: model,
+                motionPolicy: motionPolicy,
                 onFocusWorkspace: { [weak controller] item in
                     controller?.focusWorkspaceFromBar(named: item.name)
                 },
@@ -231,6 +235,16 @@ final class WorkspaceBarManager {
             resolved: resolved,
             snapshot: snapshot,
             instance: instance
+        )
+        surfaceCoordinator.register(
+            window: panel,
+            id: surfaceId(for: monitor.id),
+            policy: SurfacePolicy(
+                kind: .workspaceBar,
+                hitTestPolicy: .interactive,
+                capturePolicy: .included,
+                suppressesManagedFocusRecovery: false
+            )
         )
         panel.orderFrontRegardless()
     }
@@ -292,6 +306,7 @@ final class WorkspaceBarManager {
 
     private func removeBarForMonitor(_ monitorId: Monitor.ID) {
         if let instance = barsByMonitor[monitorId] {
+            surfaceCoordinator.unregister(id: surfaceId(for: monitorId))
             instance.panel.orderOut(nil)
             instance.panel.close()
             barsByMonitor.removeValue(forKey: monitorId)
@@ -300,10 +315,15 @@ final class WorkspaceBarManager {
 
     func removeAllBars() {
         for (_, instance) in barsByMonitor {
+            surfaceCoordinator.unregister(id: surfaceId(for: instance.monitorId))
             instance.panel.orderOut(nil)
             instance.panel.close()
         }
         barsByMonitor.removeAll()
+    }
+
+    private func surfaceId(for monitorId: Monitor.ID) -> String {
+        "workspace-bar-\(String(describing: monitorId))"
     }
 
     private func updateBarFrameAndPosition(
@@ -338,8 +358,7 @@ final class WorkspaceBarManager {
         let geometry = WorkspaceBarGeometry.resolve(monitor: monitor, resolved: resolved, isVisible: true)
         let items = controller?.workspaceBarItems(
             for: monitor,
-            deduplicate: resolved.deduplicateAppIcons,
-            hideEmpty: resolved.hideEmptyWorkspaces
+            projection: resolved.projectionOptions
         ) ?? []
 
         return WorkspaceBarSnapshot(
@@ -390,7 +409,10 @@ final class WorkspaceBarManager {
         return panel
     }
 
-    nonisolated static func effectivePosition(for monitor: Monitor, resolved: ResolvedBarSettings) -> WorkspaceBarPosition {
+    nonisolated static func effectivePosition(
+        for monitor: Monitor,
+        resolved: ResolvedBarSettings
+    ) -> WorkspaceBarPosition {
         WorkspaceBarGeometry.effectivePosition(for: monitor, resolved: resolved)
     }
 

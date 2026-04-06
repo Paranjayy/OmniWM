@@ -278,20 +278,22 @@ omniwmctl command <command-path> [arguments...]
 
 | Command | Arguments | Layout | Description |
 |---------|-----------|--------|-------------|
-| `command switch-workspace` | `<number>` | shared | Switch to a workspace by one-based index on the current monitor |
+| `command switch-workspace` | `<number>` | shared | Switch to a workspace by numeric workspace ID on the current monitor |
 | `command switch-workspace next` | — | shared | Switch to the next workspace |
 | `command switch-workspace prev` | — | shared | Switch to the previous workspace |
 | `command switch-workspace back-and-forth` | — | shared | Switch to the previously active workspace |
-| `command switch-workspace anywhere` | `<number>` | shared | Focus a workspace by one-based index across all monitors |
+| `command switch-workspace anywhere` | `<number>` | shared | Focus a workspace by numeric workspace ID across all monitors |
 
 ### Move to Workspace
 
 | Command | Arguments | Layout | Description |
 |---------|-----------|--------|-------------|
-| `command move-to-workspace` | `<number>` | shared | Move focused window to workspace by one-based index |
+| `command move-to-workspace` | `<number>` | shared | Move focused window to a workspace by numeric workspace ID |
 | `command move-to-workspace up` | — | shared | Move focused window to the adjacent workspace above |
 | `command move-to-workspace down` | — | shared | Move focused window to the adjacent workspace below |
-| `command move-to-workspace on-monitor` | `<number> <left\|right\|up\|down>` | shared | Move focused window to a workspace on an adjacent monitor |
+| `command move-to-workspace on-monitor` | `<number> <left\|right\|up\|down>` | shared | Move focused window to a workspace already assigned to the requested adjacent monitor |
+
+Workspace IDs are positive numeric strings. Direct hotkeys stay limited to `1-9`, but the workspace UI and IPC/CLI both support `10+`.
 
 ### Monitor Focus
 
@@ -342,6 +344,7 @@ omniwmctl command <command-path> [arguments...]
 |---------|-----------|--------|-------------|
 | `command toggle-focused-window-floating` | — | shared | Toggle focused window between tiled and floating |
 | `command raise-all-floating-windows` | — | shared | Raise all visible floating windows |
+| `command rescue-offscreen-windows` | — | shared | Clamp tracked floating windows back onto their visible monitors |
 | `command scratchpad assign` | — | shared | Assign the focused window to the scratchpad |
 | `command scratchpad toggle` | — | shared | Show or hide the scratchpad window |
 
@@ -420,6 +423,7 @@ Field tokens are part of the CLI contract. Returned JSON still uses the payload 
 | `apps` | — | — | Managed app summary |
 | `focused-window` | — | — | Focused managed window snapshot |
 | `focused-window-decision` | — | — | Focused window rule/debug decision snapshot |
+| `reconcile-debug` | — | — | Reconcile runtime snapshot and recent trace dump for debugging |
 | `windows` | `--window`, `--workspace`, `--display`, `--focused`, `--visible`, `--floating`, `--scratchpad`, `--app`, `--bundle-id` | window fields | Managed windows |
 | `workspaces` | `--workspace`, `--display`, `--current`, `--visible`, `--focused` | workspace fields | Configured workspaces with occupancy |
 | `displays` | `--display`, `--main`, `--current` | display fields | Connected displays with geometry |
@@ -450,7 +454,12 @@ omniwmctl query capabilities
 
 # Debug why a window was tiled/floated
 omniwmctl query focused-window-decision
+
+# Dump the reconcile runtime snapshot and recent trace
+omniwmctl query reconcile-debug
 ```
+
+`reconcile-debug` returns diagnostic text fields: `snapshot`, `trace`, and `traceLimit`.
 
 ---
 
@@ -480,7 +489,9 @@ omniwmctl workspace focus-name <name>
 
 | Action | Arguments | Description |
 |--------|-----------|-------------|
-| `focus-name` | `<name>` | Focus a workspace by raw name or configured display name |
+| `focus-name` | `<name>` | Focus a workspace by raw workspace ID or unambiguous configured display name |
+
+Numeric inputs are resolved as raw workspace IDs first. Display-name lookup is a convenience path and fails when multiple workspaces share the same display name.
 
 ---
 
@@ -788,7 +799,7 @@ Completions are context-aware: query names, selectors, field names, command path
   "status": "<success|executed|ignored|error|subscribed>",
   "code": null,
   "result": {
-    "kind": "<pong|version|workspace-bar|active-workspace|focused-monitor|apps|focused-window|windows|workspaces|displays|rules|rule-actions|queries|commands|subscriptions|capabilities|focused-window-decision|subscribed>",
+    "kind": "<pong|version|workspace-bar|active-workspace|focused-monitor|apps|focused-window|windows|workspaces|displays|rules|rule-actions|queries|commands|subscriptions|capabilities|focused-window-decision|reconcile-debug|subscribed>",
     "payload": { ... }
   }
 }

@@ -45,12 +45,12 @@ This document is for contributors who want to understand OmniWM's internals. It 
 
 ### SwiftPM Targets
 
-OmniWM is built with Swift Package Manager (Swift 6.2, strict concurrency). There are four targets with a clear dependency graph:
+OmniWM is built with Swift Package Manager (Swift 6.2, strict concurrency). There are five targets with a clear dependency graph:
 
 ```
-OmniWMIPC          (zero dependencies — shared IPC protocol models)
-    ^         ^
-    |          \
+OmniWMIPC         COmniWMKernels
+    ^                   ^
+    |                    \
 OmniWMCtl      OmniWM + GhosttyKit   (CLI tool)       (main library)
                    ^
                    |
@@ -61,7 +61,8 @@ OmniWMCtl      OmniWM + GhosttyKit   (CLI tool)       (main library)
 |--------|---------|--------------|
 | `OmniWMIPC` | Shared IPC data models and wire format | None |
 | `OmniWMCtl` | CLI tool (`omniwmctl`) | OmniWMIPC |
-| `OmniWM` | Core window manager library | OmniWMIPC, GhosttyKit, system frameworks |
+| `COmniWMKernels` | Checked-in C header target for Zig kernel imports | None |
+| `OmniWM` | Core window manager library | OmniWMIPC, GhosttyKit, COmniWMKernels, system frameworks |
 | `OmniWMApp` | Executable wrapper with SwiftUI scene | OmniWM |
 
 ### Source Directory Map
@@ -80,7 +81,8 @@ Sources/
 │   │   ├── Border/                  Focused window border rendering (3 files)
 │   │   ├── Config/                  Settings store, migrations, export, per-monitor settings (16 files)
 │   │   ├── Controller/              WMController, event handlers, refresh pipeline (17 files)
-│   │   ├── Input/                   Hotkey registration, commands, secure input monitoring (6 files)
+│   │   ├── Input/                   Hotkey action catalog, binding persistence,
+│   │   │                            and secure input monitoring (7 files)
 │   │   ├── Layout/
 │   │   │   ├── DNode.swift          Shared types: WindowToken, WindowHandle
 │   │   │   ├── LayoutBoundary.swift Layout snapshots & workspace geometry
@@ -91,20 +93,28 @@ Sources/
 │   │   ├── Menu/                    Menu extraction for MenuAnywhere (3 files)
 │   │   ├── Monitor/                 Display detection, OutputId, restore assignments (5 files)
 │   │   ├── Overview/                Bird's-eye workspace overview mode (9 files)
+│   │   ├── Reconcile/               Runtime snapshot/trace, restore planning,
+│   │   │                            and persisted restore models (14 files)
 │   │   ├── Rules/                   Window rule evaluation engine (1 file)
 │   │   ├── SkyLight/                Private macOS API wrappers (2 files)
 │   │   ├── Sleep/                   Sleep prevention manager (1 file)
 │   │   ├── Support/                 Utility types & extensions (3 files)
-│   │   └── Workspace/               Workspace model, window model, naming, state (5 files)
+│   │   ├── Surface/                 Shared surface policy, hit-testing,
+│   │   │                            and capture eligibility (2 files)
+│   │   └── Workspace/               Workspace model, session state,
+│   │                                and runtime coordination (6 files)
 │   ├── IPC/                         IPC server, connections, routing (9 files)
 │   ├── QuakeTerminal/               Drop-down terminal, Ghostty integration (9 files)
 │   └── UI/                          SwiftUI settings, status bar, workspace bar,
 │                                    command palette, hidden bar, updater popup
 │                                    (34 files)
+├── COmniWMKernels/                  C import surface for Zig kernels (header + stub)
 ├── OmniWMApp/                       2 files: @main entry + settings redirect
 ├── OmniWMCtl/                       7 files: CLI parser, IPC client, renderer
 └── OmniWMIPC/                       5 files: models, wire format, socket path
 ```
+
+`Zig/omniwm_kernels/` lives at the repository root beside `Sources/`. It contains the leaf kernels that are built into `.build/zig-kernels/lib/libomniwm_kernels.a`.
 
 ### External Dependencies
 
@@ -112,22 +122,29 @@ OmniWM has **zero third-party package dependencies**. All functionality is built
 
 - **System frameworks**: AppKit, ApplicationServices, Carbon, Metal, MetalKit, QuartzCore
 - **SkyLight**: A private Apple framework for low-latency window server access, linked via `-framework SkyLight` unsafe flag
-- **GhosttyKit**: A local binary xcframework at `Frameworks/GhosttyKit.xcframework` prepared outside git, providing terminal emulation for the Quake Terminal feature
+- **GhosttyKit**: A local binary xcframework at `Frameworks/GhosttyKit.xcframework`, validated against the pinned path and SHA-256 in `Scripts/build-metadata.env`, providing terminal emulation for the Quake Terminal feature
 - **System libraries**: libz, libc++
+- **Zig kernels**: `Zig/omniwm_kernels/src/`, built into `.build/zig-kernels/lib/libomniwm_kernels.a` by `./Scripts/build-zig-kernels.sh` and statically linked into the `OmniWM` executable, so official releases remain a single signed/notarized app bundle
+- **Zig toolchain**: required to rebuild the leaf-kernel static library and pinned via `Scripts/build-metadata.env`
 
 ### Building & Running
 
 ```bash
 # Debug build
-swift build
+make build
 
 # Run tests
-swift test
+make test
+make kernels-test
 
-# Code quality
+# Code quality and pre-PR verification
 make lint          # SwiftLint check
 make format        # SwiftFormat
-make check         # Verify formatting
+make verify        # Lint + build + tests with pinned build inputs
+make check         # Compatibility alias for make verify
+
+# Release preflight
+make release-check # Release-grade preflight before packaging or /release use
 
 # Create distributable app bundle
 ./Scripts/package-app.sh release true    # Build, sign, notarize
@@ -429,13 +446,16 @@ This separation means layout logic can be unit-tested without any macOS UI or ac
 
 **WorkspaceManager** (`Sources/OmniWM/Core/Workspace/WorkspaceManager.swift`)
 
-Owns workspace definitions, the window model, session state, and monitor tracking.
+Owns workspace definitions, the window model, session state, monitor tracking, and the reconcile runtime used for debugging and relaunch restore behavior.
 
 ```
 WorkspaceManager
 ├── monitors: [Monitor]                     Display geometry
 ├── workspacesById: [ID: WorkspaceDescriptor]   Workspace names & monitor assignments
 ├── windows: WindowModel                    All tracked windows
+├── reconcileTrace / runtimeStore           Replayed runtime snapshot and trace state
+├── restorePlanner                          Restore and rescue planning
+├── bootPersistedWindowRestoreCatalog       Relaunch restore intents loaded from settings
 ├── session: SessionState                   Ephemeral runtime state
 │   ├── monitorSessions: [MonitorID: MonitorSession]
 │   │   ├── visibleWorkspaceId
@@ -453,6 +473,8 @@ WorkspaceManager
 │   └── interactionMonitorId: Monitor.ID?
 └── nativeFullscreenRecords                 Fullscreen transition tracking
 ```
+
+Post-`v0.4.5`, `WorkspaceManager` also owns the reconcile runtime. `RuntimeStore` and `ReconcileTraceRecorder` capture normalized window-management events into a replayable snapshot, exposed through `reconcileSnapshotDump()` and `reconcileTraceDump()` for IPC diagnostics. `PersistedWindowRestoreCatalog` stores relaunch restore intent such as workspace target, preferred monitor, and floating geometry so managed floating windows can be restored or rescued across launches.
 
 **WindowModel** (`Sources/OmniWM/Core/Workspace/WindowModel.swift`)
 
@@ -479,6 +501,8 @@ Entries are indexed by both `WindowToken` and raw `windowId` for fast lookup fro
 **Directory:** `Sources/OmniWM/Core/Layout/Niri/`
 
 Niri arranges windows in vertical columns that scroll horizontally, inspired by the [Niri](https://github.com/YaLTeR/niri) Wayland compositor.
+
+Three leaf kernels in this area now live in `Zig/omniwm_kernels/src` and are imported through the checked-in `COmniWMKernels` C header target: axis constraint solving, viewport geometry, and monitor restore assignment matching. Their Swift counterparts remain thin wrappers so the surrounding layout engine, navigation, and AppKit-facing orchestration stay in Swift.
 
 **Node Tree:**
 
@@ -608,7 +632,9 @@ Focus management is complex because OmniWM must coordinate its intent with what 
 
 **Hotkeys** (`Sources/OmniWM/Core/Input/`)
 
-`HotkeyCenter` registers global hotkeys via Carbon's `RegisterEventHotKey` API. Each binding maps a key+modifiers combination to a `HotkeyCommand` enum case. There are 67 commands, each tagged with layout compatibility:
+`ActionCatalog` is the source of truth for the 67 hotkey-triggerable actions. It defines each action's title, category, layout compatibility, search terms, default and alternate bindings, and optional IPC command linkage. `HotkeyBinding` persists a `bindings` array per action, and `HotkeyBindingRegistry` canonicalizes both legacy single-binding payloads and newer multi-binding settings data.
+
+`HotkeyCenter` flattens those action bindings and registers each key+modifiers combination via Carbon's `RegisterEventHotKey` API, so a single action can be triggered by multiple shortcuts. Actions are still tagged with layout compatibility:
 
 - `.shared` — works with any layout (focus, move, workspace switch, float, scratchpad, UI toggles)
 - `.niri` — Niri-only (moveColumn, toggleColumnTabbed, focusPrevious, cycleColumnWidth)
@@ -778,7 +804,7 @@ A lightweight `NSWindow` overlay that draws a rounded rectangle around the focus
 | **Status Bar** | `UI/StatusBar/StatusBarController.swift` | Menu bar icon with settings access, manual update checks, and workspace summary |
 | **Release Updater** | `App/UpdateCoordinator.swift`, `UI/UpdateWindowController.swift` | Polls the latest GitHub release once per day on launch, supports manual checks from Settings and the status bar, and shows a manual-action popup with release notes |
 
-OmniWM utility windows such as Settings, App Rules, Sponsors, and the updater popup register with `OwnedWindowRegistry`. That lets focus, hit-testing, and recovery code treat OmniWM-owned UI differently from external app windows.
+OmniWM utility windows such as Settings, App Rules, Sponsors, and the updater popup still register through `OwnedWindowRegistry`, but that type now acts as a facade over `SurfaceCoordinator` and `SurfaceScene`. The shared surface system assigns each owned UI surface a `SurfaceKind` and `SurfacePolicy`, centralizing hit-testing, screen-capture inclusion, and managed-focus-recovery suppression across overview, workspace bar, border, quake, and utility windows.
 
 ---
 
@@ -905,13 +931,15 @@ CLIRenderer displays result
        // implementation or delegation to a handler
    ```
 
-3. **Add a default binding** (optional) in `Sources/OmniWM/Core/Input/DefaultHotkeyBindings.swift`.
+3. **Add the action spec** in `Sources/OmniWM/Core/Input/ActionCatalog.swift` so the command has its title, category, search metadata, and default or alternate bindings. `DefaultHotkeyBindings.swift` is only a thin wrapper over this catalog.
 
-4. **Expose via IPC** in `Sources/OmniWM/IPC/IPCCommandRouter.swift` — add the string mapping.
+4. **Expose via IPC** in `Sources/OmniWM/IPC/IPCCommandRouter.swift` — add the routing to the new command when it should be scriptable.
 
 5. **Add CLI support** in `Sources/OmniWMCtl/CLIParser.swift` — add the command name.
 
 6. **Update the automation manifest** in `Sources/OmniWMIPC/IPCAutomationManifest.swift` — add the command description.
+
+Actions can carry multiple persisted bindings, so any extra default shortcuts should be modeled in `ActionCatalog` rather than as separate commands.
 
 ### 6.2 Adding a New IPC Query
 
@@ -980,9 +1008,13 @@ OmniWM uses SkyLight (private macOS framework) for low-latency window operations
 
 ## 7. Testing
 
-**Runner:** `swift test` via SwiftPM. Requires macOS 15+.
+**Runner:** `make test` via SwiftPM. Requires macOS 15+ and the pinned Zig toolchain in `Scripts/build-metadata.env`.
 
-**Test directory:** `Tests/OmniWMTests/` (55 files: 52 test files + 3 support files)
+**Kernel tests:** `make kernels-test`
+
+**Release preflight:** `make release-check`
+
+**Test directory:** `Tests/OmniWMTests/`
 
 **Test patterns:**
 

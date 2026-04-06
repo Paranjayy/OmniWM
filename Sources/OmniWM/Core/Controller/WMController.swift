@@ -25,6 +25,9 @@ struct WindowFocusOperations {
 
 @MainActor @Observable
 final class WMController {
+    private static let frontingTraceLoggingEnabled =
+        ProcessInfo.processInfo.environment["OMNIWM_DEBUG_SCRATCHPAD_REVEAL"] == "1"
+
     struct WorkspaceBarRefreshDebugState {
         var requestCount: Int = 0
         var scheduledCount: Int = 0
@@ -49,6 +52,9 @@ final class WMController {
 
     var isEnabled: Bool = true
     var hotkeysEnabled: Bool = true
+    private(set) var desiredEnabled: Bool = true
+    private(set) var desiredHotkeysEnabled: Bool = true
+    private(set) var accessibilityPermissionGranted = AccessibilityPermissionMonitor.shared.isGranted
     private(set) var focusFollowsMouseEnabled: Bool = false
     private(set) var moveMouseToFocusedWindowEnabled: Bool = false
 
@@ -61,6 +67,8 @@ final class WMController {
     let axManager = AXManager()
     let appInfoCache = AppInfoCache()
     let focusBridge: FocusBridgeCoordinator
+    let focusPolicyEngine: FocusPolicyEngine
+    private let restorePlanner = RestorePlanner()
     let windowRuleEngine = WindowRuleEngine()
 
     var niriEngine: NiriLayoutEngine?
@@ -70,7 +78,7 @@ final class WMController {
     @ObservationIgnored
     lazy var borderManager: BorderManager = .init()
     @ObservationIgnored
-    private lazy var workspaceBarManager: WorkspaceBarManager = .init()
+    private lazy var workspaceBarManager: WorkspaceBarManager = .init(motionPolicy: motionPolicy)
     @ObservationIgnored
     private var workspaceBarRefreshGeneration: UInt64 = 0
     @ObservationIgnored
@@ -79,8 +87,18 @@ final class WMController {
     private var hiddenWorkspaceBarMonitorIds: Set<Monitor.ID> = []
     @ObservationIgnored
     private let hiddenBarController: HiddenBarController
-//    @ObservationIgnored
-//    private lazy var quakeTerminalController: QuakeTerminalController = .init(settings: settings)
+    @ObservationIgnored
+    private lazy var quakeTerminalController: QuakeTerminalController = .init(
+        settings: settings,
+        motionPolicy: motionPolicy
+    )
+    @ObservationIgnored
+    private lazy var commandPaletteController: CommandPaletteController = .init(motionPolicy: motionPolicy)
+    @ObservationIgnored
+    private lazy var sponsorsWindowController: SponsorsWindowController = .init(
+        motionPolicy: motionPolicy,
+        ownedWindowRegistry: ownedWindowRegistry
+    )
 
     var isTransferringWindow: Bool = false
     var hiddenAppPIDs: Set<pid_t> = []
@@ -121,6 +139,7 @@ final class WMController {
     weak var ipcApplicationBridge: IPCApplicationBridge?
 
     let animationClock = AnimationClock()
+    let motionPolicy: MotionPolicy
     private let windowFocusOperations: WindowFocusOperations
     weak var statusBarController: StatusBarController?
 
@@ -130,10 +149,12 @@ final class WMController {
         windowFocusOperations: WindowFocusOperations = .live
     ) {
         self.settings = settings
+        motionPolicy = MotionPolicy(animationsEnabled: settings.animationsEnabled)
         self.hiddenBarController = hiddenBarController ?? HiddenBarController(settings: settings)
         self.windowFocusOperations = windowFocusOperations
         workspaceManager = WorkspaceManager(settings: settings)
         focusBridge = FocusBridgeCoordinator()
+        focusPolicyEngine = FocusPolicyEngine()
         workspaceManager.updateAnimationClock(animationClock)
         hotkeys.onCommand = { [weak self] command in
             self?.commandHandler.handleCommand(command)
@@ -148,9 +169,31 @@ final class WMController {
         workspaceManager.onSessionStateChanged = { [weak self] in
             self?.handleSessionStateChanged()
         }
+        focusPolicyEngine.onLeaseChanged = { [weak self] lease in
+            self?.workspaceManager.recordReconcileEvent(
+                .focusLeaseChanged(
+                    lease: lease,
+                    source: .focusPolicy
+                )
+            )
+        }
+        MenuAnywhereController.shared.onMenuTrackingChanged = { [weak self] isTracking in
+            guard let self else { return }
+            if isTracking {
+                self.focusPolicyEngine.beginLease(
+                    owner: .nativeMenu,
+                    reason: "menu_anywhere",
+                    suppressesFocusFollowsMouse: true,
+                    duration: nil
+                )
+            } else {
+                self.focusPolicyEngine.endLease(owner: .nativeMenu)
+            }
+        }
     }
 
     func applyPersistedSettings(_ settings: SettingsStore) {
+        setAnimationsEnabled(settings.animationsEnabled, persist: false)
         applyCurrentAppearanceMode()
 
         updateHotkeyBindings(settings.hotkeyBindings)
@@ -228,6 +271,20 @@ final class WMController {
         settings.saveSessionSnapshot(SessionSnapshot(entries: entries))
     }
 
+    func setAnimationsEnabled(_ enabled: Bool, persist: Bool = true) {
+        if persist, settings.animationsEnabled != enabled {
+            settings.animationsEnabled = enabled
+        }
+
+        guard motionPolicy.animationsEnabled != enabled else {
+            statusBarController?.rebuildMenu()
+            return
+        }
+
+        motionPolicy.animationsEnabled = enabled
+        statusBarController?.rebuildMenu()
+    }
+
     func applyCurrentAppearanceMode() {
         settings.appearanceMode.apply()
         workspaceBarManager.updateSettings()
@@ -235,17 +292,34 @@ final class WMController {
     }
 
     func setEnabled(_ enabled: Bool) {
-        isEnabled = enabled
+        desiredEnabled = enabled
         if enabled {
             serviceLifecycleManager.start()
         } else {
             serviceLifecycleManager.stop()
         }
+        reconcileEnabledAndHotkeysState()
     }
 
     func setHotkeysEnabled(_ enabled: Bool) {
-        hotkeysEnabled = enabled
-        enabled ? hotkeys.start() : hotkeys.stop()
+        desiredHotkeysEnabled = enabled
+        reconcileEnabledAndHotkeysState()
+    }
+
+    func updateAccessibilityPermissionGranted(_ granted: Bool) {
+        accessibilityPermissionGranted = granted
+        reconcileEnabledAndHotkeysState()
+    }
+
+    func reconcileEnabledAndHotkeysState() {
+        isEnabled = desiredEnabled && accessibilityPermissionGranted
+
+        let shouldEnableHotkeys = desiredHotkeysEnabled
+            && isEnabled
+            && hasStartedServices
+            && !serviceLifecycleManager.isSecureInputActive
+        hotkeysEnabled = shouldEnableHotkeys
+        shouldEnableHotkeys ? hotkeys.start() : hotkeys.stop()
     }
 
     func setGapSize(_ size: Double) {
@@ -418,11 +492,13 @@ final class WMController {
         layoutRefreshController.requestRelayout(reason: .monitorSettingsChanged)
     }
 
-    func workspaceBarItems(for monitor: Monitor, deduplicate: Bool, hideEmpty: Bool) -> [WorkspaceBarItem] {
+    func workspaceBarItems(
+        for monitor: Monitor,
+        projection options: WorkspaceBarProjectionOptions
+    ) -> [WorkspaceBarItem] {
         WorkspaceBarDataSource.workspaceBarItems(
             for: monitor,
-            deduplicate: deduplicate,
-            hideEmpty: hideEmpty,
+            options: options,
             workspaceManager: workspaceManager,
             appInfoCache: appInfoCache,
             niriEngine: niriEngine,
@@ -525,7 +601,7 @@ final class WMController {
         layoutRefreshController.requestFullRescan(reason: .appRulesChanged)
     }
 
-    var hotkeyRegistrationFailures: Set<HotkeyCommand> {
+    var hotkeyRegistrationFailures: [HotkeyCommand: HotkeyRegistrationFailureReason] {
         hotkeys.registrationFailures
     }
 
@@ -622,6 +698,20 @@ final class WMController {
     func configureWorkspaceBarManagerForTests(monitors: [Monitor]) {
         workspaceBarManager.monitorProvider = { monitors }
         workspaceBarManager.screenProvider = { _ in nil }
+    }
+
+    func configureQuakeTransitionForTests(
+        visible: Bool,
+        isTransitioning: Bool
+    ) {
+        quakeTerminalController.configureTransitionStateForTests(
+            visible: visible,
+            isTransitioning: isTransitioning
+        )
+    }
+
+    func quakeTerminalIsTransitioningForTests() -> Bool {
+        quakeTerminalController.isTransitioningForTests
     }
 
     func enableNiriLayout(
@@ -1083,12 +1173,26 @@ final class WMController {
         axManager.markWindowActive(entry.windowId)
 
         if let hiddenState = workspaceManager.hiddenState(for: entry.token) {
-            if hiddenState.isScratchpad {
-                layoutRefreshController.restoreScratchpadWindow(entry, monitor: monitor)
-            } else {
-                layoutRefreshController.unhideWindow(entry, monitor: monitor)
+            let focusOnRevealSuccess: LayoutRefreshController.PostLayoutAction = { [weak self] in
+                self?.focusWindow(entry.token)
             }
-        } else if let frame = workspaceManager.resolvedFloatingFrame(
+            if hiddenState.isScratchpad {
+                layoutRefreshController.restoreScratchpadWindow(
+                    entry,
+                    monitor: monitor,
+                    onSuccess: focusOnRevealSuccess
+                )
+            } else {
+                layoutRefreshController.unhideWindow(
+                    entry,
+                    monitor: monitor,
+                    onSuccess: focusOnRevealSuccess
+                )
+            }
+            return
+        }
+
+        if let frame = workspaceManager.resolvedFloatingFrame(
             for: entry.token,
             preferredMonitor: monitor
         ) {
@@ -1460,16 +1564,19 @@ final class WMController {
             }
 
             if let updatedEntry = workspaceManager.entry(for: token) {
-                updatedEntry.managedReplacementMetadata = ManagedReplacementMetadata(
-                    bundleId: evaluation.facts.ax.bundleId ?? updatedEntry.managedReplacementMetadata?.bundleId,
-                    workspaceId: updatedEntry.workspaceId,
-                    mode: updatedEntry.mode,
-                    role: evaluation.facts.ax.role ?? updatedEntry.managedReplacementMetadata?.role,
-                    subrole: evaluation.facts.ax.subrole ?? updatedEntry.managedReplacementMetadata?.subrole,
-                    title: evaluation.facts.ax.title ?? updatedEntry.managedReplacementMetadata?.title,
-                    windowLevel: evaluation.facts.windowServer?.level ?? updatedEntry.managedReplacementMetadata?.windowLevel,
-                    parentWindowId: evaluation.facts.windowServer?.parentId ?? updatedEntry.managedReplacementMetadata?.parentWindowId,
-                    frame: evaluation.facts.windowServer?.frame ?? updatedEntry.managedReplacementMetadata?.frame
+                _ = workspaceManager.setManagedReplacementMetadata(
+                    ManagedReplacementMetadata(
+                        bundleId: evaluation.facts.ax.bundleId ?? updatedEntry.managedReplacementMetadata?.bundleId,
+                        workspaceId: updatedEntry.workspaceId,
+                        mode: updatedEntry.mode,
+                        role: evaluation.facts.ax.role ?? updatedEntry.managedReplacementMetadata?.role,
+                        subrole: evaluation.facts.ax.subrole ?? updatedEntry.managedReplacementMetadata?.subrole,
+                        title: evaluation.facts.ax.title ?? updatedEntry.managedReplacementMetadata?.title,
+                        windowLevel: evaluation.facts.windowServer?.level ?? updatedEntry.managedReplacementMetadata?.windowLevel,
+                        parentWindowId: evaluation.facts.windowServer?.parentId ?? updatedEntry.managedReplacementMetadata?.parentWindowId,
+                        frame: evaluation.facts.windowServer?.frame ?? updatedEntry.managedReplacementMetadata?.frame
+                    ),
+                    for: token
                 )
             }
 
@@ -1678,7 +1785,8 @@ final class WMController {
         workspaceManager.entry(forPid: pid, windowId: windowId)?.workspaceId
     }
 
-    func openCommandPalette() { CommandPaletteController.shared.toggle(wmController: self) }
+    func openCommandPalette() { commandPaletteController.toggle(wmController: self) }
+    func openSponsorsWindow() { sponsorsWindowController.show() }
     func openMenuAnywhere() { windowActionHandler.openMenuAnywhere() }
     func navigateToCommandPaletteWindow(_ handle: WindowHandle) { windowActionHandler.navigateToWindow(handle: handle) }
     func summonCommandPaletteWindowRight(
@@ -1694,6 +1802,71 @@ final class WMController {
     }
     func toggleOverview() { windowActionHandler.toggleOverview() }
     func raiseAllFloatingWindows() { windowActionHandler.raiseAllFloatingWindows() }
+    @discardableResult
+    func rescueOffscreenWindows() -> Int {
+        guard !isLockScreenActive else { return 0 }
+
+        var candidates: [RestorePlanner.FloatingRescueCandidate] = []
+        let visibleWorkspaceIds = workspaceManager.visibleWorkspaceIds()
+
+        for entry in workspaceManager.allFloatingEntries() {
+            guard entry.layoutReason == .standard else { continue }
+            guard visibleWorkspaceIds.contains(entry.workspaceId) else { continue }
+            guard let targetMonitor = workspaceManager.monitor(for: entry.workspaceId)
+                ?? monitorForInteraction()
+                ?? workspaceManager.monitors.first
+            else {
+                continue
+            }
+
+            guard let targetFrame = workspaceManager.resolvedFloatingFrame(
+                for: entry.token,
+                preferredMonitor: targetMonitor
+            ) else {
+                continue
+            }
+
+            candidates.append(
+                .init(
+                    token: entry.token,
+                    pid: entry.pid,
+                    windowId: entry.windowId,
+                    workspaceId: entry.workspaceId,
+                    targetMonitor: targetMonitor,
+                    currentFrame: liveFrame(for: entry),
+                    targetFrame: targetFrame,
+                    isScratchpadHidden: workspaceManager.hiddenState(for: entry.token)?.isScratchpad == true,
+                    isWorkspaceInactiveHidden: workspaceManager.hiddenState(for: entry.token)?.workspaceInactive == true
+                )
+            )
+        }
+
+        let rescuePlan = restorePlanner.planFloatingRescue(candidates)
+        var frameUpdates: [(pid: pid_t, windowId: Int, frame: CGRect)] = []
+        var rescuedEntries: [WindowModel.Entry] = []
+
+        for operation in rescuePlan.operations {
+            guard let entry = workspaceManager.entry(for: operation.token) else { continue }
+            workspaceManager.updateFloatingGeometry(
+                frame: operation.targetFrame,
+                for: operation.token,
+                referenceMonitor: operation.targetMonitor,
+                restoreToFloating: true
+            )
+            axManager.forceApplyNextFrame(for: operation.windowId)
+            frameUpdates.append((operation.pid, operation.windowId, operation.targetFrame))
+            rescuedEntries.append(entry)
+        }
+
+        if !frameUpdates.isEmpty {
+            axManager.applyFramesParallel(frameUpdates)
+            for entry in rescuedEntries {
+                windowFocusOperations.raiseWindow(entry.axRef.element)
+            }
+        }
+
+        return rescuePlan.rescuedCount
+    }
     func isOverviewOpen() -> Bool { windowActionHandler.isOverviewOpen() }
 
     @discardableResult
@@ -1859,9 +2032,7 @@ extension WMController {
     }
 
     func isPointInOwnWindow(_ point: CGPoint) -> Bool {
-        if isPointInQuakeTerminal(point) { return true }
-        if windowActionHandler.isPointInOverview(point) { return true }
-        return ownedWindowRegistry.contains(point: point)
+        ownedWindowRegistry.contains(point: point)
     }
 
     var hasFrontmostOwnedWindow: Bool {
@@ -1885,9 +2056,15 @@ extension WMController {
         windowId: Int,
         axRef: AXWindowRef
     ) {
+        recordFrontingTrace(pid: pid, windowId: windowId)
         windowFocusOperations.activateApp(pid)
         windowFocusOperations.focusSpecificWindow(pid, UInt32(windowId), axRef.element)
         windowFocusOperations.raiseWindow(axRef.element)
+    }
+
+    private func recordFrontingTrace(pid: pid_t, windowId: Int) {
+        guard Self.frontingTraceLoggingEnabled else { return }
+        fputs("[ScratchpadFronting] pid=\(pid) windowId=\(windowId)\n", stderr)
     }
 
     func focusWindow(_ token: WindowToken) {

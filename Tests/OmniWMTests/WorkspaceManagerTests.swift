@@ -33,6 +33,30 @@ private func makeWorkspaceManagerTestWindow(windowId: Int = 101) -> AXWindowRef 
     AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: windowId)
 }
 
+private func makeWorkspaceManagerReplacementMetadata(
+    bundleId: String = "com.example.editor",
+    workspaceId: WorkspaceDescriptor.ID,
+    mode: TrackedWindowMode = .tiling,
+    title: String? = "Sprint Notes",
+    role: String? = "AXWindow",
+    subrole: String? = "AXStandardWindow",
+    windowLevel: Int32? = 0,
+    parentWindowId: UInt32? = nil,
+    frame: CGRect? = nil
+) -> ManagedReplacementMetadata {
+    ManagedReplacementMetadata(
+        bundleId: bundleId,
+        workspaceId: workspaceId,
+        mode: mode,
+        role: role,
+        subrole: subrole,
+        title: title,
+        windowLevel: windowLevel,
+        parentWindowId: parentWindowId,
+        frame: frame
+    )
+}
+
 @MainActor
 private func addWorkspaceManagerTestHandle(
     manager: WorkspaceManager,
@@ -57,6 +81,350 @@ private func workspaceConfigurations(
 ) -> [WorkspaceConfiguration] {
     assignments.map { name, assignment in
         WorkspaceConfiguration(name: name, monitorAssignment: assignment)
+    }
+}
+
+@Suite @MainActor struct PersistedWindowRestoreCatalogWorkspaceManagerTests {
+    @Test func relaunchHydrationResolvesWorkspaceNameOntoFreshRuntimeWorkspaceId() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+
+        let initialSettings = SettingsStore(defaults: defaults)
+        initialSettings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main),
+            ("2", .main)
+        ])
+        let initialManager = WorkspaceManager(settings: initialSettings)
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 401, name: "Main", x: 0, y: 0)
+        initialManager.applyMonitorConfigurationChange([monitor])
+
+        _ = try #require(initialManager.workspaceId(for: "1", createIfMissing: true))
+        let initialWorkspace2 = try #require(initialManager.workspaceId(for: "2", createIfMissing: true))
+        let sourceToken = initialManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4001),
+            pid: 4001,
+            windowId: 4001,
+            to: initialWorkspace2
+        )
+        _ = initialManager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: initialWorkspace2,
+                title: "Workspace Restore"
+            ),
+            for: sourceToken
+        )
+        initialManager.flushPersistedWindowRestoreCatalogNow()
+        let persistedEntries = initialManager.persistedWindowRestoreCatalogForTests().entries
+        #expect(persistedEntries.count == 1)
+
+        let relaunchedSettings = SettingsStore(defaults: defaults)
+        let relaunchedManager = WorkspaceManager(settings: relaunchedSettings)
+        relaunchedManager.applyMonitorConfigurationChange([monitor])
+
+        let relaunchedWorkspace1 = try #require(relaunchedManager.workspaceId(for: "1", createIfMissing: true))
+        let relaunchedWorkspace2 = try #require(relaunchedManager.workspaceId(for: "2", createIfMissing: true))
+        #expect(relaunchedWorkspace2 != initialWorkspace2)
+
+        let relaunchedToken = relaunchedManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4002),
+            pid: 4002,
+            windowId: 4002,
+            to: relaunchedWorkspace1,
+            managedReplacementMetadata: makeWorkspaceManagerReplacementMetadata(
+                workspaceId: relaunchedWorkspace1,
+                title: "Workspace Restore"
+            )
+        )
+
+        #expect(relaunchedManager.workspace(for: relaunchedToken) == relaunchedWorkspace2)
+        #expect(relaunchedManager.replacementCorrelation(for: relaunchedToken) == nil)
+        #expect(relaunchedManager.consumedBootPersistedWindowRestoreKeysForTests() == Set(persistedEntries.map(\.key)))
+    }
+
+    @Test func sameTopologyRelaunchRestoresFloatingGeometryAndRescueEligibility() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+
+        let initialSettings = SettingsStore(defaults: defaults)
+        initialSettings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 410, name: "Studio Display", x: 0, y: 0)
+        let initialManager = WorkspaceManager(settings: initialSettings)
+        initialManager.applyMonitorConfigurationChange([monitor])
+
+        let initialWorkspace = try #require(initialManager.workspaceId(for: "1", createIfMissing: true))
+        let sourceToken = initialManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4101),
+            pid: 4101,
+            windowId: 4101,
+            to: initialWorkspace,
+            mode: .floating
+        )
+        _ = initialManager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: initialWorkspace,
+                mode: .floating,
+                title: "Floating Restore"
+            ),
+            for: sourceToken
+        )
+        let persistedFrame = CGRect(x: 360, y: 210, width: 780, height: 520)
+        initialManager.updateFloatingGeometry(
+            frame: persistedFrame,
+            for: sourceToken,
+            referenceMonitor: monitor,
+            restoreToFloating: true
+        )
+        initialManager.flushPersistedWindowRestoreCatalogNow()
+
+        let relaunchedSettings = SettingsStore(defaults: defaults)
+        let relaunchedManager = WorkspaceManager(settings: relaunchedSettings)
+        relaunchedManager.applyMonitorConfigurationChange([monitor])
+
+        let relaunchedWorkspace = try #require(relaunchedManager.workspaceId(for: "1", createIfMissing: true))
+        let relaunchedToken = relaunchedManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4102),
+            pid: 4102,
+            windowId: 4102,
+            to: relaunchedWorkspace,
+            mode: .tiling,
+            managedReplacementMetadata: makeWorkspaceManagerReplacementMetadata(
+                workspaceId: relaunchedWorkspace,
+                title: "Floating Restore"
+            )
+        )
+
+        let restoredFrame = try #require(
+            relaunchedManager.resolvedFloatingFrame(for: relaunchedToken, preferredMonitor: monitor)
+        )
+        let restoreIntent = try #require(relaunchedManager.restoreIntent(for: relaunchedToken))
+
+        #expect(relaunchedManager.windowMode(for: relaunchedToken) == .floating)
+        #expect(restoredFrame == persistedFrame)
+        #expect(restoreIntent.rescueEligible)
+    }
+
+    @Test func persistedRestoreFallsBackToBestMonitorAcrossSingleToMultiRelaunch() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+
+        let initialSettings = SettingsStore(defaults: defaults)
+        initialSettings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+        let oldStudio = makeWorkspaceManagerTestMonitor(
+            displayId: 420,
+            name: "Studio Display",
+            x: 0,
+            y: 0,
+            width: 1600,
+            height: 900
+        )
+        let initialManager = WorkspaceManager(settings: initialSettings)
+        initialManager.applyMonitorConfigurationChange([oldStudio])
+
+        let initialWorkspace = try #require(initialManager.workspaceId(for: "1", createIfMissing: true))
+        let sourceToken = initialManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4201),
+            pid: 4201,
+            windowId: 4201,
+            to: initialWorkspace,
+            mode: .floating
+        )
+        _ = initialManager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: initialWorkspace,
+                mode: .floating,
+                title: "Monitor Fallback"
+            ),
+            for: sourceToken
+        )
+        initialManager.updateFloatingGeometry(
+            frame: CGRect(x: 1260, y: 620, width: 280, height: 180),
+            for: sourceToken,
+            referenceMonitor: oldStudio,
+            restoreToFloating: true
+        )
+        initialManager.flushPersistedWindowRestoreCatalogNow()
+
+        let newStudio = makeWorkspaceManagerTestMonitor(
+            displayId: 421,
+            name: "Studio Display",
+            x: 0,
+            y: 0,
+            width: 1600,
+            height: 900
+        )
+        let sideMonitor = makeWorkspaceManagerTestMonitor(
+            displayId: 422,
+            name: "Sidecar",
+            x: 1600,
+            y: 0,
+            width: 1280,
+            height: 900
+        )
+        let relaunchedManager = WorkspaceManager(settings: SettingsStore(defaults: defaults))
+        relaunchedManager.applyMonitorConfigurationChange([newStudio, sideMonitor])
+
+        let relaunchedWorkspace = try #require(relaunchedManager.workspaceId(for: "1", createIfMissing: true))
+        let relaunchedToken = relaunchedManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4202),
+            pid: 4202,
+            windowId: 4202,
+            to: relaunchedWorkspace,
+            managedReplacementMetadata: makeWorkspaceManagerReplacementMetadata(
+                workspaceId: relaunchedWorkspace,
+                title: "Monitor Fallback"
+            )
+        )
+
+        let restoreIntent = try #require(relaunchedManager.restoreIntent(for: relaunchedToken))
+        let restoredFrame = try #require(
+            relaunchedManager.resolvedFloatingFrame(for: relaunchedToken, preferredMonitor: newStudio)
+        )
+
+        #expect(restoreIntent.preferredMonitor?.displayId == newStudio.displayId)
+        #expect(newStudio.visibleFrame.contains(restoredFrame))
+    }
+
+    @Test func persistedRestoreKeepsFloatingRecoveryWithinBoundsAcrossMultiToSingleRelaunch() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+
+        let initialSettings = SettingsStore(defaults: defaults)
+        initialSettings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main),
+            ("2", .secondary)
+        ])
+        let primary = makeWorkspaceManagerTestMonitor(displayId: 430, name: "Primary", x: 0, y: 0)
+        let secondary = makeWorkspaceManagerTestMonitor(displayId: 431, name: "Secondary", x: 1920, y: 0)
+        let initialManager = WorkspaceManager(settings: initialSettings)
+        initialManager.applyMonitorConfigurationChange([primary, secondary])
+
+        let initialWorkspace1 = try #require(initialManager.workspaceId(for: "1", createIfMissing: true))
+        let initialWorkspace2 = try #require(initialManager.workspaceId(for: "2", createIfMissing: true))
+        let sourceToken = initialManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4301),
+            pid: 4301,
+            windowId: 4301,
+            to: initialWorkspace2,
+            mode: .floating
+        )
+        _ = initialManager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: initialWorkspace2,
+                mode: .floating,
+                title: "Collapsed Restore"
+            ),
+            for: sourceToken
+        )
+        initialManager.updateFloatingGeometry(
+            frame: CGRect(x: 3440, y: 720, width: 320, height: 220),
+            for: sourceToken,
+            referenceMonitor: secondary,
+            restoreToFloating: true
+        )
+        initialManager.flushPersistedWindowRestoreCatalogNow()
+
+        let singleMonitor = makeWorkspaceManagerTestMonitor(
+            displayId: 432,
+            name: "Primary",
+            x: 0,
+            y: 0,
+            width: 1440,
+            height: 900
+        )
+        let relaunchedManager = WorkspaceManager(settings: SettingsStore(defaults: defaults))
+        relaunchedManager.applyMonitorConfigurationChange([singleMonitor])
+
+        let relaunchedWorkspace1 = try #require(relaunchedManager.workspaceId(for: "1", createIfMissing: true))
+        let relaunchedWorkspace2 = try #require(relaunchedManager.workspaceId(for: "2", createIfMissing: true))
+        let relaunchedToken = relaunchedManager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4302),
+            pid: 4302,
+            windowId: 4302,
+            to: relaunchedWorkspace1,
+            managedReplacementMetadata: makeWorkspaceManagerReplacementMetadata(
+                workspaceId: relaunchedWorkspace1,
+                title: "Collapsed Restore"
+            )
+        )
+
+        let restoredFrame = try #require(
+            relaunchedManager.resolvedFloatingFrame(for: relaunchedToken, preferredMonitor: singleMonitor)
+        )
+
+        #expect(relaunchedManager.workspace(for: relaunchedToken) == relaunchedWorkspace2)
+        #expect(singleMonitor.visibleFrame.contains(restoredFrame))
+        #expect(initialWorkspace1 != relaunchedWorkspace1)
+    }
+
+    @Test func ambiguousDuplicateSemanticKeysAreRejectedFromPersistence() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 440, name: "Main", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([monitor])
+
+        let workspaceId = try #require(manager.workspaceId(for: "1", createIfMissing: true))
+        let firstToken = manager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4401),
+            pid: 4401,
+            windowId: 4401,
+            to: workspaceId
+        )
+        let secondToken = manager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4402),
+            pid: 4402,
+            windowId: 4402,
+            to: workspaceId
+        )
+
+        let ambiguousMetadata = makeWorkspaceManagerReplacementMetadata(
+            bundleId: "com.example.terminal",
+            workspaceId: workspaceId,
+            title: nil
+        )
+        _ = manager.setManagedReplacementMetadata(ambiguousMetadata, for: firstToken)
+        _ = manager.setManagedReplacementMetadata(ambiguousMetadata, for: secondToken)
+
+        #expect(manager.persistedWindowRestoreCatalogForTests().entries.isEmpty)
+    }
+
+    @Test func removingTrackedWindowRemovesPersistedEntryOnNextCatalogSave() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 450, name: "Main", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([monitor])
+
+        let workspaceId = try #require(manager.workspaceId(for: "1", createIfMissing: true))
+        let token = manager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4501),
+            pid: 4501,
+            windowId: 4501,
+            to: workspaceId
+        )
+        _ = manager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: workspaceId,
+                title: "Removal"
+            ),
+            for: token
+        )
+
+        manager.flushPersistedWindowRestoreCatalogNow()
+        #expect(settings.loadPersistedWindowRestoreCatalog().entries.count == 1)
+
+        _ = manager.removeWindow(pid: token.pid, windowId: token.windowId)
+        manager.flushPersistedWindowRestoreCatalogNow()
+
+        #expect(settings.loadPersistedWindowRestoreCatalog() == .empty)
     }
 }
 
@@ -90,6 +458,57 @@ private func workspaceConfigurations(
 
         #expect(manager.activeWorkspace(on: newCenter.id)?.id == ws1)
         #expect(manager.activeWorkspace(on: newFar.id)?.id == ws2)
+    }
+
+    @Test @MainActor func applyMonitorConfigurationChangeMatchesRestoreAssignmentsWhenMonitorIsInserted() {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .specificDisplay(OutputId(displayId: 10, name: "Center"))),
+            ("2", .specificDisplay(OutputId(displayId: 20, name: "Right"))),
+            ("3", .specificDisplay(OutputId(displayId: 20, name: "Right")))
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let oldCenter = makeWorkspaceManagerTestMonitor(displayId: 10, name: "Center", x: 1000, y: 0)
+        let oldRight = makeWorkspaceManagerTestMonitor(displayId: 20, name: "Right", x: 3000, y: 0)
+        manager.applyMonitorConfigurationChange([oldCenter, oldRight])
+
+        guard let ws1 = manager.workspaceId(for: "1", createIfMissing: true),
+              let ws2 = manager.workspaceId(for: "2", createIfMissing: true),
+              let ws3 = manager.workspaceId(for: "3", createIfMissing: true)
+        else {
+            Issue.record("Failed to create expected workspaces")
+            return
+        }
+
+        #expect(manager.setActiveWorkspace(ws1, on: oldCenter.id))
+        #expect(manager.setActiveWorkspace(ws2, on: oldRight.id))
+        #expect(manager.setActiveWorkspace(ws3, on: oldRight.id))
+
+        let newLeft = makeWorkspaceManagerTestMonitor(displayId: 30, name: "Left", x: 0, y: 0)
+        let newCenter = makeWorkspaceManagerTestMonitor(displayId: 40, name: "Replacement Center", x: 1000, y: 0)
+        let newRight = makeWorkspaceManagerTestMonitor(displayId: 50, name: "Replacement Right", x: 3000, y: 0)
+        let newMonitors = [newLeft, newCenter, newRight]
+
+        let expectedAssignments = resolveWorkspaceRestoreAssignments(
+            snapshots: [
+                WorkspaceRestoreSnapshot(monitor: .init(monitor: oldCenter), workspaceId: ws1),
+                WorkspaceRestoreSnapshot(monitor: .init(monitor: oldRight), workspaceId: ws3)
+            ],
+            monitors: newMonitors,
+            workspaceExists: { $0 == ws1 || $0 == ws3 }
+        )
+
+        manager.applyMonitorConfigurationChange(newMonitors)
+
+        #expect(expectedAssignments[newLeft.id] == nil)
+        #expect(expectedAssignments[newCenter.id] == ws1)
+        #expect(expectedAssignments[newRight.id] == ws3)
+        #expect(manager.activeWorkspace(on: newLeft.id) == nil)
+        #expect(manager.activeWorkspace(on: newCenter.id)?.id == expectedAssignments[newCenter.id])
+        #expect(manager.activeWorkspace(on: newRight.id)?.id == expectedAssignments[newRight.id])
+        #expect(manager.workspaces(on: newRight.id).map(\.id) == [ws2, ws3])
     }
 
     @Test @MainActor func adjacentMonitorPrefersClosestDirectionalCandidate() {
@@ -554,7 +973,7 @@ private func workspaceConfigurations(
         #expect(manager.floatingState(for: newToken) == floatingState)
         #expect(manager.manualLayoutOverride(for: newToken) == .forceFloat)
         #expect(manager.layoutReason(for: newToken) == .macosHiddenApp)
-        #expect(manager.cachedConstraints(for: newToken) == constraints)
+        #expect(manager.cachedConstraints(for: newToken) == nil)
     }
 
     @Test @MainActor func floatingFocusDoesNotPoisonTiledPreferredFocus() {
@@ -825,6 +1244,7 @@ private func workspaceConfigurations(
         let removed = addWorkspaceManagerTestHandle(manager: manager, windowId: 2302, pid: 2302, workspaceId: workspaceId)
 
         _ = manager.setManagedFocus(removed, in: workspaceId, onMonitor: monitor.id)
+        _ = manager.beginManagedFocusRequest(removed, in: workspaceId, onMonitor: monitor.id)
 
         manager.removeMissing(
             keys: Set([.init(pid: 2301, windowId: 2301)]),
@@ -832,6 +1252,7 @@ private func workspaceConfigurations(
         )
         #expect(manager.entry(for: removed) != nil)
         #expect(manager.focusedHandle == removed)
+        #expect(manager.pendingFocusedToken == removed.id)
 
         manager.removeMissing(
             keys: Set([.init(pid: 2301, windowId: 2301)]),
@@ -839,6 +1260,8 @@ private func workspaceConfigurations(
         )
 
         #expect(manager.entry(for: removed) == nil)
+        #expect(manager.focusedToken == nil)
+        #expect(manager.pendingFocusedToken == nil)
         #expect(manager.focusedHandle == nil)
         #expect(manager.lastFocusedHandle(in: workspaceId) == nil)
         #expect(manager.resolveAndSetWorkspaceFocus(in: workspaceId, onMonitor: monitor.id) == survivor)
@@ -1322,6 +1745,33 @@ private func workspaceConfigurations(
 
         #expect(manager.activeWorkspace(on: monitor.id)?.id == ws1)
         #expect(manager.workspaceId(named: "3") == nil)
+    }
+
+    @Test @MainActor func configuredWorkspace10CanBeCreatedSortedAndFocused() {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main),
+            ("10", .main),
+            ("11", .main)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 150, name: "Main", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([monitor])
+
+        guard let workspace10 = manager.workspaceId(for: "10", createIfMissing: true),
+              let workspace11 = manager.workspaceId(for: "11", createIfMissing: true)
+        else {
+            Issue.record("Failed to create expected high workspace IDs")
+            return
+        }
+
+        #expect(manager.workspaces.map(\.name) == ["1", "10", "11"])
+        _ = workspace11
+        #expect(manager.activeWorkspace(on: monitor.id)?.name == "1")
+        #expect(manager.setActiveWorkspace(workspace10, on: monitor.id))
+        #expect(manager.activeWorkspace(on: monitor.id)?.name == "10")
     }
 
     @Test @MainActor func applySessionPatchCommitsViewportAndRememberedFocusAtomically() {

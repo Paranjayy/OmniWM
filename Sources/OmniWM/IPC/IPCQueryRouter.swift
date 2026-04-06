@@ -36,8 +36,7 @@ final class IPCQueryRouter {
             )
             let items = controller.workspaceBarItems(
                 for: monitor,
-                deduplicate: resolved.deduplicateAppIcons,
-                hideEmpty: resolved.hideEmptyWorkspaces
+                projection: resolved.projectionOptions
             )
 
             return IPCWorkspaceBarMonitor(
@@ -278,6 +277,14 @@ final class IPCQueryRouter {
                 heuristicReasons: snapshot.heuristicReasons.map(\.rawValue),
                 attributeFetchSucceeded: snapshot.attributeFetchSucceeded
             )
+        )
+    }
+
+    func reconcileDebugResult(traceLimit: Int = 50) -> IPCReconcileDebugQueryResult {
+        IPCReconcileDebugQueryResult(
+            snapshot: controller.workspaceManager.reconcileSnapshotDump(),
+            trace: controller.workspaceManager.reconcileTraceDump(limit: traceLimit),
+            traceLimit: traceLimit
         )
     }
 
@@ -571,8 +578,7 @@ final class IPCQueryRouter {
     }
 
     private func workspaceNumber(from rawName: String) -> Int? {
-        guard let value = Int(rawName), value > 0 else { return nil }
-        return value
+        WorkspaceIDPolicy.workspaceNumber(from: rawName)
     }
 
     private func rect(from rect: CGRect) -> IPCRect {

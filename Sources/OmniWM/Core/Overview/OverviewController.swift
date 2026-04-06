@@ -57,6 +57,7 @@ final class OverviewController {
     }
 
     private weak var wmController: WMController?
+    private let motionPolicy: MotionPolicy
     private let environment: OverviewEnvironment
     private let ownedWindowRegistry: OwnedWindowRegistry
 
@@ -89,10 +90,12 @@ final class OverviewController {
 
     init(
         wmController: WMController,
+        motionPolicy: MotionPolicy,
         environment: OverviewEnvironment = .init(),
         ownedWindowRegistry: OwnedWindowRegistry = .shared
     ) {
         self.wmController = wmController
+        self.motionPolicy = motionPolicy
         self.environment = environment
         self.ownedWindowRegistry = ownedWindowRegistry
         animator = OverviewAnimator(controller: self)
@@ -104,7 +107,7 @@ final class OverviewController {
         case .closed:
             open()
         case .open:
-            dismiss(reason: .cancel)
+            dismiss(reason: .cancel, animated: true)
         case .opening, .closing:
             break
         }
@@ -123,8 +126,13 @@ final class OverviewController {
         let displayId = monitor?.displayId ?? CGMainDisplayID()
         let refreshRate = detectRefreshRate(for: displayId)
 
-        state = .opening(progress: 0)
-        animator?.startOpenAnimation(displayId: displayId, refreshRate: refreshRate)
+        if motionPolicy.animationsEnabled {
+            state = .opening(progress: 0)
+            animator?.startOpenAnimation(displayId: displayId, refreshRate: refreshRate)
+        } else {
+            state = .open
+            animator?.cancelAnimation()
+        }
 
         updateWindowDisplays()
         showWindows()
@@ -150,7 +158,7 @@ final class OverviewController {
     func dismiss(
         reason: OverviewDismissReason = .cancel,
         targetWindow: WindowHandle? = nil,
-        animated: Bool = true
+        animated: Bool
     ) {
         switch state {
         case .closed:
@@ -175,7 +183,7 @@ final class OverviewController {
 
         state = .closing(targetWindow: resolvedTargetWindow, progress: 0)
 
-        if animated {
+        if animated && motionPolicy.animationsEnabled {
             animator?.startCloseAnimation(
                 targetWindow: resolvedTargetWindow,
                 displayId: displayId,
@@ -338,7 +346,7 @@ final class OverviewController {
             }
             window.onDismiss = { [weak self] monitorId in
                 self?.activeInteractionMonitorId = monitorId
-                self?.dismiss(reason: .cancel)
+                self?.dismiss(reason: .cancel, animated: true)
             }
             window.onScroll = { [weak self] monitorId, delta in
                 self?.adjustScrollOffset(by: delta, on: monitorId)
@@ -373,12 +381,30 @@ final class OverviewController {
 
         if let primaryWindow {
             primaryWindow.show(asKeyWindow: true)
-            ownedWindowRegistry.register(primaryWindow)
+            ownedWindowRegistry.register(
+                primaryWindow,
+                surfaceId: "overview-\(String(describing: primaryWindow.monitorId))",
+                policy: SurfacePolicy(
+                    kind: .overview,
+                    hitTestPolicy: .interactive,
+                    capturePolicy: .included,
+                    suppressesManagedFocusRecovery: true
+                )
+            )
         }
 
         for window in windows where primaryWindow == nil || window !== primaryWindow {
             window.show(asKeyWindow: false)
-            ownedWindowRegistry.register(window)
+            ownedWindowRegistry.register(
+                window,
+                surfaceId: "overview-\(String(describing: window.monitorId))",
+                policy: SurfacePolicy(
+                    kind: .overview,
+                    hitTestPolicy: .interactive,
+                    capturePolicy: .included,
+                    suppressesManagedFocusRecovery: true
+                )
+            )
         }
     }
 
@@ -389,7 +415,7 @@ final class OverviewController {
 
     private func closeWindows() {
         for window in windows {
-            ownedWindowRegistry.unregister(window)
+            ownedWindowRegistry.unregister(surfaceId: "overview-\(String(describing: window.monitorId))")
             window.hide()
             window.close()
         }
@@ -426,7 +452,12 @@ final class OverviewController {
 
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            let windowMap = Dictionary(uniqueKeysWithValues: content.windows.map { ($0.windowID, $0) })
+            let eligibleWindows = content.windows.compactMap { scWindow -> (CGWindowID, SCWindow)? in
+                let windowNumber = Int(scWindow.windowID)
+                guard ownedWindowRegistry.isCaptureEligible(windowNumber: windowNumber) else { return nil }
+                return (scWindow.windowID, scWindow)
+            }
+            let windowMap = Dictionary(uniqueKeysWithValues: eligibleWindows)
 
             for request in requests {
                 guard !Task.isCancelled else { return }
@@ -548,7 +579,7 @@ final class OverviewController {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: self.environment.selectionDismissDelayNanoseconds)
             guard self.state.isOpen else { return }
-            self.dismiss(reason: .selection, targetWindow: handle)
+            self.dismiss(reason: .selection, targetWindow: handle, animated: true)
         }
     }
 
@@ -665,7 +696,7 @@ final class OverviewController {
 
     func handleApplicationDidResignActive() {
         guard state.isOpen else { return }
-        dismiss(reason: .externalDeactivation)
+        dismiss(reason: .externalDeactivation, animated: true)
     }
 
     private func cleanup() {
@@ -867,8 +898,8 @@ final class OverviewController {
     }
 }
 
-private extension OverviewController {
-    struct DragSession {
+extension OverviewController {
+    private struct DragSession {
         let handle: WindowHandle
         let windowId: Int
         let workspaceId: WorkspaceDescriptor.ID
@@ -876,7 +907,7 @@ private extension OverviewController {
         let startPoint: CGPoint
     }
 
-    func beginDrag(on monitorId: Monitor.ID, handle: WindowHandle, startPoint: CGPoint) {
+    private func beginDrag(on monitorId: Monitor.ID, handle: WindowHandle, startPoint: CGPoint) {
         guard let wmController else { return }
         guard let entry = wmController.workspaceManager.entry(for: handle) else { return }
 
@@ -901,7 +932,7 @@ private extension OverviewController {
         }
     }
 
-    func updateDrag(on monitorId: Monitor.ID, at point: CGPoint) {
+    private func updateDrag(on monitorId: Monitor.ID, at point: CGPoint) {
         guard dragSession != nil else { return }
         activeInteractionMonitorId = monitorId
         dragGhostController?.updatePosition(cursorLocation: globalPoint(from: point, on: monitorId))
@@ -914,7 +945,7 @@ private extension OverviewController {
         }
     }
 
-    func endDrag(on monitorId: Monitor.ID, at point: CGPoint) {
+    private func endDrag(on monitorId: Monitor.ID, at point: CGPoint) {
         guard let session = dragSession else { return }
         activeInteractionMonitorId = monitorId
         dragGhostController?.updatePosition(cursorLocation: globalPoint(from: point, on: monitorId))
@@ -938,19 +969,19 @@ private extension OverviewController {
         updateWindowDisplays()
     }
 
-    func cancelDrag() {
+    private func cancelDrag() {
         clearDragTargets()
         dragGhostController?.endDrag()
         dragSession = nil
         updateWindowDisplays()
     }
 
-    func resolveDragTarget(at point: CGPoint, on monitorId: Monitor.ID) -> OverviewDragTarget? {
+    private func resolveDragTarget(at point: CGPoint, on monitorId: Monitor.ID) -> OverviewDragTarget? {
         guard let layout = layoutsByMonitor[monitorId] else { return nil }
         return layout.resolveDragTarget(at: point, draggedHandle: dragSession?.handle)
     }
 
-    func performDragAction(session: DragSession, target: OverviewDragTarget) {
+    private func performDragAction(session: DragSession, target: OverviewDragTarget) {
         guard let wmController else { return }
 
         switch target {
@@ -997,14 +1028,14 @@ private extension OverviewController {
         wmController.layoutRefreshController.requestImmediateRelayout(reason: .overviewMutation)
     }
 
-    func isNiriLayout(workspaceId: WorkspaceDescriptor.ID) -> Bool {
+    private func isNiriLayout(workspaceId: WorkspaceDescriptor.ID) -> Bool {
         guard let wmController else { return false }
         guard let name = wmController.workspaceManager.descriptor(for: workspaceId)?.name else { return false }
         let layoutType = wmController.settings.layoutType(for: name)
         return layoutType != .dwindle
     }
 
-    func overviewInsertPositionToNiri(_ position: InsertPosition) -> InsertPosition {
+    private func overviewInsertPositionToNiri(_ position: InsertPosition) -> InsertPosition {
         switch position {
         case .before:
             return .after
@@ -1014,5 +1045,4 @@ private extension OverviewController {
             return .swap
         }
     }
-
 }

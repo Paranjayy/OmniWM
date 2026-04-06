@@ -1,4 +1,5 @@
 import Foundation
+import OmniWMIPC
 
 enum QuakeTerminalPosition: String, CaseIterable, Codable {
     case top, center, bottom
@@ -149,6 +150,10 @@ final class SettingsStore {
         didSet { defaults.set(workspaceBarShowLabels, forKey: Keys.workspaceBarShowLabels) }
     }
 
+    var workspaceBarShowFloatingWindows: Bool {
+        didSet { defaults.set(workspaceBarShowFloatingWindows, forKey: Keys.workspaceBarShowFloatingWindows) }
+    }
+
     var workspaceBarWindowLevel: WorkspaceBarWindowLevel {
         didSet { defaults.set(workspaceBarWindowLevel.rawValue, forKey: Keys.workspaceBarWindowLevel) }
     }
@@ -289,6 +294,10 @@ final class SettingsStore {
         didSet { defaults.set(commandPaletteLastMode.rawValue, forKey: Keys.commandPaletteLastMode) }
     }
 
+    var animationsEnabled: Bool {
+        didSet { defaults.set(animationsEnabled, forKey: Keys.animationsEnabled) }
+    }
+
     var hiddenBarIsCollapsed: Bool {
         didSet { defaults.set(hiddenBarIsCollapsed, forKey: Keys.hiddenBarIsCollapsed) }
     }
@@ -391,6 +400,26 @@ final class SettingsStore {
         didSet { defaults.set(sessionSnapshotEnabled, forKey: Keys.sessionSnapshotEnabled) }
     }
 
+    func loadPersistedWindowRestoreCatalog() -> PersistedWindowRestoreCatalog {
+        guard let data = defaults.data(forKey: Keys.persistedWindowRestoreCatalog),
+              let catalog = try? JSONDecoder().decode(PersistedWindowRestoreCatalog.self, from: data)
+        else {
+            return .empty
+        }
+
+        return catalog
+    }
+
+    func savePersistedWindowRestoreCatalog(_ catalog: PersistedWindowRestoreCatalog) {
+        if catalog.entries.isEmpty {
+            defaults.removeObject(forKey: Keys.persistedWindowRestoreCatalog)
+            return
+        }
+
+        guard let data = try? JSONEncoder().encode(catalog) else { return }
+        defaults.set(data, forKey: Keys.persistedWindowRestoreCatalog)
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let baseline = SettingsExport.defaults()
@@ -444,6 +473,8 @@ final class SettingsStore {
         workspaceBarEnabled = defaults.object(forKey: Keys.workspaceBarEnabled) as? Bool ?? baseline.workspaceBarEnabled
         workspaceBarShowLabels = defaults.object(forKey: Keys.workspaceBarShowLabels) as? Bool ??
             baseline.workspaceBarShowLabels
+        workspaceBarShowFloatingWindows = defaults.object(forKey: Keys.workspaceBarShowFloatingWindows) as? Bool ??
+            baseline.workspaceBarShowFloatingWindows
         workspaceBarWindowLevel = WorkspaceBarWindowLevel(
             rawValue: defaults.string(forKey: Keys.workspaceBarWindowLevel) ?? ""
         ) ?? WorkspaceBarWindowLevel(rawValue: baseline.workspaceBarWindowLevel) ?? .popup
@@ -511,6 +542,8 @@ final class SettingsStore {
         commandPaletteLastMode = CommandPaletteMode(
             rawValue: defaults.string(forKey: Keys.commandPaletteLastMode) ?? ""
         ) ?? CommandPaletteMode(rawValue: baseline.commandPaletteLastMode) ?? .windows
+
+        animationsEnabled = defaults.object(forKey: Keys.animationsEnabled) as? Bool ?? baseline.animationsEnabled
 
         hiddenBarIsCollapsed = defaults.object(forKey: Keys.hiddenBarIsCollapsed) as? Bool ??
             baseline.hiddenBarIsCollapsed
@@ -581,8 +614,21 @@ final class SettingsStore {
         )
     }
 
+    func clearBinding(for commandId: String) {
+        updateBinding(for: commandId, newBinding: .unassigned)
+    }
+
+    func resetBindings(for commandId: String) {
+        guard let defaultBinding = HotkeyBindingRegistry.defaults().first(where: { $0.id == commandId }),
+              let index = hotkeyBindings.firstIndex(where: { $0.id == commandId })
+        else { return }
+        hotkeyBindings[index] = defaultBinding
+    }
+
     func findConflicts(for binding: KeyBinding, excluding commandId: String) -> [HotkeyBinding] {
-        hotkeyBindings.filter { $0.id != commandId && $0.binding.conflicts(with: binding) }
+        hotkeyBindings.filter { hotkeyBinding in
+            hotkeyBinding.id != commandId && hotkeyBinding.binding.conflicts(with: binding)
+        }
     }
 
     func configuredWorkspaceNames() -> [String] {
@@ -697,9 +743,9 @@ final class SettingsStore {
     private static func normalizedWorkspaceConfigurations(_ configs: [WorkspaceConfiguration]) -> [WorkspaceConfiguration] {
         var seen: Set<String> = []
         let normalized = configs
-            .filter { WorkspaceConfiguration.allowedNames.contains($0.name) }
+            .filter { WorkspaceIDPolicy.normalizeRawID($0.name) != nil }
             .filter { seen.insert($0.name).inserted }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted { WorkspaceIDPolicy.sortsBefore($0.name, $1.name) }
 
         if normalized.isEmpty {
             return BuiltInSettingsDefaults.workspaceConfigurations
@@ -740,6 +786,7 @@ final class SettingsStore {
         return ResolvedBarSettings(
             enabled: override?.enabled ?? workspaceBarEnabled,
             showLabels: override?.showLabels ?? workspaceBarShowLabels,
+            showFloatingWindows: override?.showFloatingWindows ?? workspaceBarShowFloatingWindows,
             deduplicateAppIcons: override?.deduplicateAppIcons ?? workspaceBarDeduplicateAppIcons,
             hideEmptyWorkspaces: override?.hideEmptyWorkspaces ?? workspaceBarHideEmptyWorkspaces,
             reserveLayoutSpace: override?.reserveLayoutSpace ?? workspaceBarReserveLayoutSpace,
@@ -989,6 +1036,7 @@ private enum Keys {
 
     static let workspaceBarEnabled = "settings.workspaceBar.enabled"
     static let workspaceBarShowLabels = "settings.workspaceBar.showLabels"
+    static let workspaceBarShowFloatingWindows = "settings.workspaceBar.showFloatingWindows"
     static let workspaceBarWindowLevel = "settings.workspaceBar.windowLevel"
     static let workspaceBarPosition = "settings.workspaceBar.position"
     static let workspaceBarNotchAware = "settings.workspaceBar.notchAware"
@@ -1017,6 +1065,7 @@ private enum Keys {
     static let statusBarUseWorkspaceId = "settings.statusBarUseWorkspaceId"
 
     static let commandPaletteLastMode = "settings.commandPalette.lastMode"
+    static let animationsEnabled = "settings.animationsEnabled"
 
     static let hiddenBarIsCollapsed = "settings.hiddenBar.isCollapsed"
 
@@ -1035,10 +1084,14 @@ private enum Keys {
     static let quakeTerminalCustomFrameHeight = "settings.quakeTerminal.customFrameHeight"
 
     static let appearanceMode = "settings.appearanceMode"
+<<<<<<< HEAD
     static let sessionSnapshot = "session.windowSnapshot"
     static let activeProfile = "settings.activeProfile"
 
     static let warpSwitcherEnabled = "settings.godBuild.warpSwitcherEnabled"
     static let windowTrashEnabled = "settings.godBuild.windowTrashEnabled"
     static let sessionSnapshotEnabled = "settings.godBuild.sessionSnapshotEnabled"
+=======
+    static let persistedWindowRestoreCatalog = "settings.restoreCatalog"
+>>>>>>> origin/main
 }

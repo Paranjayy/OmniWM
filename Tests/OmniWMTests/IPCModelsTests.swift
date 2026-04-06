@@ -114,6 +114,15 @@ private func assertRoundTrip<T: Codable & Equatable>(_ value: T) throws {
             IPCWorkspaceWindowCounts(total: 4, tiled: 2, floating: 1, scratchpad: 1)
         )
         try assertRoundTrip(
+            WorkspaceTarget.rawID("10")
+        )
+        try assertRoundTrip(
+            WorkspaceTarget.displayName("Code")
+        )
+        try assertRoundTrip(
+            IPCWorkspaceRequest(name: .focusName, target: .rawID("10"))
+        )
+        try assertRoundTrip(
             IPCWorkspaceSummary(id: "ws-1", rawName: "1", displayName: "Main", number: 1)
         )
         try assertRoundTrip(
@@ -191,6 +200,13 @@ private func assertRoundTrip<T: Codable & Equatable>(_ value: T) throws {
                     title: "Shell",
                     frame: IPCRect(x: 0, y: 0, width: 100, height: 100)
                 )
+            )
+        )
+        try assertRoundTrip(
+            IPCReconcileDebugQueryResult(
+                snapshot: "focused=nil",
+                trace: "#1 event=system-wake",
+                traceLimit: 50
             )
         )
         try assertRoundTrip(

@@ -3,12 +3,60 @@ import Foundation
 import PackageDescription
 
 let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-let ghosttyMacOSLibraryDirectory = "\(packageDirectory)/Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64"
+struct BuildMetadata {
+    let macOSDeploymentTarget: String
+    let requiredZigVersion: String
+    let ghosttyArchiveRelativePath: String
+    let ghosttyArchiveSHA256: String
+
+    static func load(packageDirectory: String) -> BuildMetadata {
+        let metadataURL = URL(fileURLWithPath: packageDirectory).appendingPathComponent("Scripts/build-metadata.env")
+        guard let contents = try? String(contentsOf: metadataURL, encoding: .utf8) else {
+            fatalError("Missing build metadata at \(metadataURL.path)")
+        }
+
+        var values: [String: String] = [:]
+        for rawLine in contents.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") {
+                continue
+            }
+
+            guard let separatorIndex = line.firstIndex(of: "=") else {
+                fatalError("Invalid build metadata line: \(line)")
+            }
+
+            let key = String(line[..<separatorIndex]).trimmingCharacters(in: .whitespaces)
+            let valueStart = line.index(after: separatorIndex)
+            let value = String(line[valueStart...]).trimmingCharacters(in: .whitespaces)
+            values[key] = value
+        }
+
+        func require(_ key: String) -> String {
+            guard let value = values[key], !value.isEmpty else {
+                fatalError("Missing \(key) in \(metadataURL.path)")
+            }
+            return value
+        }
+
+        return BuildMetadata(
+            macOSDeploymentTarget: require("OMNIWM_MACOS_DEPLOYMENT_TARGET"),
+            requiredZigVersion: require("OMNIWM_REQUIRED_ZIG_VERSION"),
+            ghosttyArchiveRelativePath: require("OMNIWM_GHOSTTY_ARCHIVE_RELATIVE_PATH"),
+            ghosttyArchiveSHA256: require("OMNIWM_GHOSTTY_ARCHIVE_SHA256")
+        )
+    }
+}
+
+let buildMetadata = BuildMetadata.load(packageDirectory: packageDirectory)
+let ghosttyArchiveURL = URL(fileURLWithPath: packageDirectory).appendingPathComponent(buildMetadata.ghosttyArchiveRelativePath)
+let ghosttyMacOSLibraryDirectory = ghosttyArchiveURL.deletingLastPathComponent().path
+let zigKernelLibraryDirectory = "\(packageDirectory)/.build/zig-kernels/lib"
 
 let package = Package(
     name: "OmniWM",
     platforms: [
-        .macOS(.v15)
+        .macOS(buildMetadata.macOSDeploymentTarget)
     ],
     products: [
         .executable(
@@ -26,6 +74,11 @@ let package = Package(
 //            path: "Frameworks/GhosttyKit.xcframework"
 //        ),
         .target(
+            name: "COmniWMKernels",
+            path: "Sources/COmniWMKernels",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "OmniWMIPC",
             path: "Sources/OmniWMIPC",
             swiftSettings: [
@@ -34,7 +87,7 @@ let package = Package(
         ),
         .target(
             name: "OmniWM",
-            dependencies: [/*"GhosttyKit",*/ "OmniWMIPC"],
+            dependencies: ["GhosttyKit", "OmniWMIPC", "COmniWMKernels"],
             path: "Sources/OmniWM",
             exclude: ["QuakeTerminal"],
             resources: [
@@ -52,9 +105,11 @@ let package = Package(
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),
+                .linkedLibrary("omniwm_kernels"),
                 .linkedLibrary("z"),
                 .linkedLibrary("c++"),
-//                .unsafeFlags(["-L\(ghosttyMacOSLibraryDirectory)"]),
+                .unsafeFlags(["-L\(zigKernelLibraryDirectory)"]),
+                .unsafeFlags(["-L\(ghosttyMacOSLibraryDirectory)"]),
                 .unsafeFlags(["-F/System/Library/PrivateFrameworks", "-framework", "SkyLight"])
             ]
         ),

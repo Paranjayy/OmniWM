@@ -32,13 +32,18 @@ Bug fixes, documentation improvements, performance work, focused cleanups, featu
 - Include testing notes **if possible**. Mention what you ran, checked, or verified.
 - Add screenshots, recordings, or CLI examples when they help explain the change.
 - Update documentation when behavior, workflows, or interfaces change.
+- Run `make verify` before opening a pull request.
+- When touching `Zig/omniwm_kernels`, run `make kernels-test`.
 
 ## Basic Workflow
 
 1. Fork the repository.
 2. Create a branch for your change.
-3. Make the change and test it.
-4. Open a pull request with clear context and reasoning.
+3. Use `make build` while iterating on local changes.
+4. Use `make test` to run the Swift test suite against the pinned Zig and Ghostty build inputs.
+5. Use `make release-check` before packaging or release-oriented work.
+6. Run `make kernels-test` when your change touches the kernel library.
+7. Open a pull request with clear context, reasoning, and the commands you ran.
 
 ## Questions and Ideas
 

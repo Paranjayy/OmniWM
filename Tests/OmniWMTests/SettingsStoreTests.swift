@@ -38,6 +38,40 @@ private func makeSettingsTestMonitor(
     )
 }
 
+private func makePersistedRestoreCatalogFixture(
+    workspaceName: String = "1",
+    monitor: Monitor = makeSettingsTestMonitor(displayId: 77, name: "Studio Display")
+) -> PersistedWindowRestoreCatalog {
+    let metadata = ManagedReplacementMetadata(
+        bundleId: "com.example.editor",
+        workspaceId: UUID(),
+        mode: .floating,
+        role: "AXWindow",
+        subrole: "AXStandardWindow",
+        title: "Sprint Notes",
+        windowLevel: 0,
+        parentWindowId: nil,
+        frame: nil
+    )
+    let key = PersistedWindowRestoreKey(metadata: metadata)!
+    return PersistedWindowRestoreCatalog(
+        entries: [
+            PersistedWindowRestoreEntry(
+                key: key,
+                restoreIntent: PersistedRestoreIntent(
+                    workspaceName: workspaceName,
+                    topologyProfile: TopologyProfile(monitors: [monitor]),
+                    preferredMonitor: DisplayFingerprint(monitor: monitor),
+                    floatingFrame: CGRect(x: 120, y: 140, width: 900, height: 600),
+                    normalizedFloatingOrigin: CGPoint(x: 0.25, y: 0.35),
+                    restoreToFloating: true,
+                    rescueEligible: true
+                )
+            )
+        ]
+    )
+}
+
 @Suite struct MonitorSettingsStoreTests {
 
     @Test func loadReturnsEmptyForMissingData() {
@@ -158,6 +192,56 @@ private func makeSettingsTestMonitor(
     }
 }
 
+@Suite @MainActor struct PersistedWindowRestoreCatalogSettingsTests {
+    @Test func persistedRestoreCatalogRoundTripsThroughUserDefaults() {
+        let defaults = makeTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        let catalog = makePersistedRestoreCatalogFixture()
+
+        settings.savePersistedWindowRestoreCatalog(catalog)
+
+        #expect(settings.loadPersistedWindowRestoreCatalog() == catalog)
+    }
+
+    @Test func persistedRestoreCatalogIsExcludedFromExportAndImport() throws {
+        let defaults = makeTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        let exportURL = makeTestSettingsURL()
+        defer { try? FileManager.default.removeItem(at: exportURL) }
+
+        settings.hotkeysEnabled = false
+        settings.savePersistedWindowRestoreCatalog(makePersistedRestoreCatalogFixture())
+
+        try settings.exportSettings(to: exportURL, mode: .full)
+
+        let rawData = try Data(contentsOf: exportURL)
+        guard let json = try JSONSerialization.jsonObject(with: rawData) as? [String: Any] else {
+            Issue.record("Expected exported settings to be a JSON object")
+            return
+        }
+
+        #expect(json.keys.contains { $0.localizedCaseInsensitiveContains("restoreCatalog") } == false)
+
+        let imported = SettingsStore(defaults: makeTestDefaults())
+        try imported.importSettings(from: exportURL, monitors: [])
+        #expect(imported.loadPersistedWindowRestoreCatalog() == .empty)
+    }
+
+    @Test func resetOwnedSettingsClearsPersistedRestoreCatalog() {
+        let defaults = makeTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+
+        settings.savePersistedWindowRestoreCatalog(makePersistedRestoreCatalogFixture())
+        #expect(defaults.data(forKey: "settings.restoreCatalog") != nil)
+
+        SettingsMigration.resetOwnedSettings(defaults: defaults)
+
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(defaults.data(forKey: "settings.restoreCatalog") == nil)
+        #expect(reloaded.loadPersistedWindowRestoreCatalog() == .empty)
+    }
+}
+
 @Suite struct CodableBackwardCompatTests {
 
     @Test func monitorNiriDecodesLegacyStringFields() throws {
@@ -234,6 +318,7 @@ private func makeSettingsTestMonitor(
             monitorName: "Roundtrip",
             enabled: true,
             showLabels: false,
+            showFloatingWindows: true,
             reserveLayoutSpace: true,
             position: .belowMenuBar,
             windowLevel: .status,
@@ -354,6 +439,7 @@ private func makeSettingsTestMonitor(
         #expect(defaults.borderColorBlue == 0.97930003794467602)
         #expect(defaults.hotkeyBindings == HotkeyBindingRegistry.defaults())
         #expect(defaults.workspaceBarEnabled == true)
+        #expect(defaults.workspaceBarShowFloatingWindows == false)
         #expect(defaults.workspaceBarNotchAware == true)
         #expect(defaults.workspaceBarReserveLayoutSpace == false)
         #expect(defaults.appRules == BuiltInSettingsDefaults.appRules)
@@ -409,6 +495,7 @@ private func makeSettingsTestMonitor(
             "hotkeyBindings": [],
             "workspaceBarEnabled": false,
             "workspaceBarShowLabels": true,
+            "workspaceBarShowFloatingWindows": false,
             "workspaceBarWindowLevel": "futureLevel",
             "workspaceBarPosition": "futurePosition",
             "workspaceBarNotchAware": false,
@@ -499,6 +586,7 @@ private func makeSettingsTestMonitor(
             hotkeyBindings: [],
             workspaceBarEnabled: true,
             workspaceBarShowLabels: false,
+            workspaceBarShowFloatingWindows: true,
             workspaceBarWindowLevel: "status",
             workspaceBarPosition: "belowMenuBar",
             workspaceBarNotchAware: true,
@@ -532,6 +620,7 @@ private func makeSettingsTestMonitor(
             statusBarShowAppNames: true,
             statusBarUseWorkspaceId: true,
             commandPaletteLastMode: "menu",
+            animationsEnabled: false,
             hiddenBarIsCollapsed: true,
             quakeTerminalEnabled: true,
             quakeTerminalPosition: "bottom",
@@ -566,6 +655,7 @@ private func makeSettingsTestMonitor(
         }
 
         #expect(hotkeyBindings.count == HotkeyBindingRegistry.defaults().count)
+        #expect(hotkeyBindings.allSatisfy { $0["binding"] != nil && $0["bindings"] == nil })
     }
 }
 
@@ -632,7 +722,7 @@ private func makeSettingsTestMonitor(
 }
 
 @Suite struct CompactSettingsExportTests {
-    @Test func compactExportOmitsRemovedAnimationsKeyAndDefaultHotkeys() throws {
+    @Test func compactExportOmitsDefaultAnimationsKeyAndDefaultHotkeys() throws {
         var export = SettingsExport.defaults()
         export.hiddenBarIsCollapsed = false
 
@@ -645,6 +735,19 @@ private func makeSettingsTestMonitor(
         #expect(json["animationsEnabled"] == nil)
         #expect((json["hiddenBarIsCollapsed"] as? Bool) == false)
         #expect(json["hotkeyBindings"] == nil)
+    }
+
+    @Test func compactExportIncludesAnimationsKeyWhenDisabled() throws {
+        var export = SettingsExport.defaults()
+        export.animationsEnabled = false
+
+        let data = try export.exportData(mode: .compact)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("Expected compact export to produce a JSON object")
+            return
+        }
+
+        #expect((json["animationsEnabled"] as? Bool) == false)
     }
 
     @Test func compactExportIncludesReadableAdditionalPersistedSettings() throws {
@@ -739,11 +842,11 @@ private func makeSettingsTestMonitor(
         let mergedData = try SettingsExport.mergedImportData(from: rawData, defaults: defaults)
         let merged = try JSONDecoder().decode(SettingsExport.self, from: mergedData)
 
-        #expect(merged.hotkeyBindings[0].binding == updatedBinding)
+        #expect(merged.hotkeyBindings[0].binding == changed.hotkeyBindings[0].binding)
         #expect(merged.hotkeyBindings[1].binding == defaults.hotkeyBindings[1].binding)
     }
 
-    @Test func legacyAnimationsEnabledKeyIsIgnoredOnImportAndOmittedOnReexport() throws {
+    @Test func animationsEnabledKeyIsHonoredOnImportAndPreservedOnReexport() throws {
         let rawData = Data(
             """
             {
@@ -756,6 +859,7 @@ private func makeSettingsTestMonitor(
 
         let mergedData = try SettingsExport.mergedImportData(from: rawData)
         let decoded = try JSONDecoder().decode(SettingsExport.self, from: mergedData)
+        #expect(decoded.animationsEnabled == false)
         #expect(decoded.hiddenBarIsCollapsed == true)
 
         let reexported = try decoded.exportData(mode: .full)
@@ -764,7 +868,7 @@ private func makeSettingsTestMonitor(
             return
         }
 
-        #expect(json["animationsEnabled"] == nil)
+        #expect((json["animationsEnabled"] as? Bool) == false)
         #expect((json["hiddenBarIsCollapsed"] as? Bool) == true)
     }
 
@@ -816,7 +920,9 @@ private func makeSettingsTestMonitor(
         #expect(decoded.mouseWarpAxis == MouseWarpAxis.horizontal.rawValue)
         #expect(decoded.focusFollowsWindowToMonitor == false)
         #expect(decoded.commandPaletteLastMode == CommandPaletteMode.windows.rawValue)
+        #expect(decoded.animationsEnabled == true)
         #expect(decoded.workspaceBarEnabled == true)
+        #expect(decoded.workspaceBarShowFloatingWindows == false)
         #expect(decoded.workspaceBarNotchAware == true)
         #expect(decoded.workspaceBarReserveLayoutSpace == false)
         #expect(decoded.workspaceConfigurations == BuiltInSettingsDefaults.workspaceConfigurations)
@@ -851,6 +957,22 @@ private func makeSettingsTestMonitor(
         )
 
         #expect(settings.resolvedBarSettings(for: monitor).reserveLayoutSpace == true)
+    }
+
+    @Test func monitorOverrideCanEnableFloatingWindowsIndependently() {
+        let settings = SettingsStore(defaults: makeTestDefaults())
+        let monitor = makeLayoutPlanTestMonitor(name: "Floating Test")
+
+        settings.workspaceBarShowFloatingWindows = false
+        settings.updateBarSettings(
+            MonitorBarSettings(
+                monitorName: monitor.name,
+                monitorDisplayId: monitor.displayId,
+                showFloatingWindows: true
+            )
+        )
+
+        #expect(settings.resolvedBarSettings(for: monitor).showFloatingWindows == true)
     }
 }
 
@@ -984,7 +1106,7 @@ private func makeSettingsTestMonitor(
 
         #expect(json["id"] as? String == "move.left")
         #expect(json["command"] == nil)
-        #expect(json["binding"] != nil)
+        #expect(json["binding"] as? String == "Unassigned")
     }
 }
 
@@ -994,9 +1116,9 @@ private func makeSettingsTestMonitor(
         let rawData = Data(
             """
             [
-              { "id": "move.left", "binding": "Control+Option+K", "command": { "focusPrevious": {} } },
+              { "id": "move.left", "bindings": ["Control+Option+K", "Control+Option+K"], "command": { "focusPrevious": {} } },
               { "id": "unknown.binding", "binding": "Option+L" },
-              { "id": 42, "binding": "Option+J" }
+              { "id": 42, "bindings": ["Option+J"] }
             ]
             """.utf8
         )
@@ -1017,15 +1139,15 @@ private func makeSettingsTestMonitor(
         #expect(settings.hotkeyBindings.map(\.id) == HotkeyBindingRegistry.defaults().map(\.id))
     }
 
-    @Test func mergedImportDataCanonicalizesBindingsById() throws {
+    @Test func mergedImportDataUsesLastExplicitBindingForDuplicateIds() throws {
         let rawData = Data(
             """
             {
               "version": \(SettingsMigration.currentSettingsEpoch),
               "hotkeyBindings": [
-                { "id": "move.left", "binding": "Control+Option+J", "command": { "focusPrevious": {} } },
+                { "id": "move.left", "bindings": ["Control+Option+J", "Control+Option+K"], "command": { "focusPrevious": {} } },
                 { "id": "unknown.binding", "binding": "Option+L" },
-                { "id": "move.left", "binding": "Control+Option+K" }
+                { "id": "move.left", "binding": "Control+Option+L" }
               ]
             }
             """.utf8
@@ -1036,13 +1158,101 @@ private func makeSettingsTestMonitor(
 
         #expect(decoded.hotkeyBindings.map(\.id) == HotkeyBindingRegistry.defaults().map(\.id))
         #expect(decoded.hotkeyBindings.first { $0.id == "move.left" }?.binding == KeyBinding(
-            keyCode: UInt32(kVK_ANSI_K),
+            keyCode: UInt32(kVK_ANSI_L),
             modifiers: UInt32(controlKey | optionKey)
         ))
         #expect(decoded.hotkeyBindings.first { $0.id == "move.right" }?.binding == KeyBinding(
             keyCode: UInt32(kVK_RightArrow),
             modifiers: UInt32(optionKey | shiftKey)
         ))
+    }
+
+    @Test func settingsStoreUpdatesSingleBindingAndResetsToDefault() {
+        let settings = SettingsStore(defaults: makeTestDefaults())
+
+        settings.updateBinding(
+            for: "move.left",
+            newBinding: KeyBinding(keyCode: UInt32(kVK_ANSI_Semicolon), modifiers: UInt32(optionKey))
+        )
+
+        #expect(settings.hotkeyBindings.first { $0.id == "move.left" }?.binding == KeyBinding(
+            keyCode: UInt32(kVK_ANSI_Semicolon),
+            modifiers: UInt32(optionKey)
+        ))
+
+        settings.resetBindings(for: "move.left")
+
+        #expect(settings.hotkeyBindings.first { $0.id == "move.left" }?.binding == HotkeyBindingRegistry.defaults().first { $0.id == "move.left" }?.binding)
+    }
+
+    @Test func clearedHotkeyPersistsAcrossReload() {
+        let defaults = makeTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+
+        settings.clearBinding(for: "move.left")
+
+        let reloaded = SettingsStore(defaults: defaults)
+
+        #expect(reloaded.hotkeyBindings.first { $0.id == "move.left" }?.binding == .unassigned)
+        #expect(reloaded.hotkeyBindings.first { $0.id == "move.right" }?.binding == HotkeyBindingRegistry.defaults().first { $0.id == "move.right" }?.binding)
+    }
+
+    @Test func findConflictsReturnsAssignedOwner() {
+        let settings = SettingsStore(defaults: makeTestDefaults())
+
+        let leftBinding = KeyBinding(keyCode: UInt32(kVK_ANSI_J), modifiers: UInt32(optionKey))
+        let rightBinding = KeyBinding(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey))
+        settings.updateBinding(for: "move.left", newBinding: leftBinding)
+        settings.updateBinding(for: "move.right", newBinding: rightBinding)
+
+        let conflicts = settings.findConflicts(
+            for: leftBinding,
+            excluding: "move.right"
+        )
+
+        #expect(conflicts.map(\.id) == ["move.left"])
+        #expect(conflicts.first?.binding == leftBinding)
+    }
+
+    @Test func mergedImportDataCanonicalizesLegacyCommandPaletteBindingsIntoOneAction() throws {
+        let rawData = Data(
+            """
+            {
+              "version": \(SettingsMigration.currentSettingsEpoch),
+              "hotkeyBindings": [
+                { "id": "openMenuPalette", "binding": "Control+Option+Shift+M" },
+                { "id": "openWindowFinder", "binding": "Control+Option+Space" }
+              ]
+            }
+            """.utf8
+        )
+
+        let mergedData = try SettingsExport.mergedImportData(from: rawData)
+        let decoded = try JSONDecoder().decode(SettingsExport.self, from: mergedData)
+
+        #expect(decoded.hotkeyBindings.first { $0.id == "openCommandPalette" }?.binding == KeyBinding(
+            keyCode: UInt32(kVK_Space),
+            modifiers: UInt32(controlKey | optionKey)
+        ))
+    }
+
+    @Test func mergedImportDataPreservesExplicitlyClearedHotkeyBinding() throws {
+        let rawData = Data(
+            """
+            {
+              "version": \(SettingsMigration.currentSettingsEpoch),
+              "hotkeyBindings": [
+                { "id": "move.left", "bindings": [] }
+              ]
+            }
+            """.utf8
+        )
+
+        let mergedData = try SettingsExport.mergedImportData(from: rawData)
+        let decoded = try JSONDecoder().decode(SettingsExport.self, from: mergedData)
+
+        #expect(decoded.hotkeyBindings.first { $0.id == "move.left" }?.binding == .unassigned)
+        #expect(decoded.hotkeyBindings.first { $0.id == "move.right" }?.binding == HotkeyBindingRegistry.defaults().first { $0.id == "move.right" }?.binding)
     }
 
     @Test func settingsStoreDropsRemovedDirectionalBindingsWithoutTouchingValidOnes() throws {
@@ -1204,26 +1414,22 @@ private func makeSettingsTestMonitor(
         ))
     }
 
-    @Test func mergedImportDataCanonicalizesLegacyCommandPaletteBindings() throws {
+    @Test func explicitEmptyCommandPaletteBindingSuppressesLegacyBindings() {
+        let defaults = makeTestDefaults()
         let rawData = Data(
             """
-            {
-              "version": \(SettingsMigration.currentSettingsEpoch),
-              "hotkeyBindings": [
-                { "id": "openMenuPalette", "binding": "Control+Option+Shift+M" },
-                { "id": "openWindowFinder", "binding": "Control+Option+Space" }
-              ]
-            }
+            [
+              { "id": "openCommandPalette", "bindings": [] },
+              { "id": "openWindowFinder", "binding": "Control+Option+Space" },
+              { "id": "openMenuPalette", "binding": "Control+Option+Shift+M" }
+            ]
             """.utf8
         )
+        defaults.set(rawData, forKey: "settings.hotkeyBindings")
 
-        let mergedData = try SettingsExport.mergedImportData(from: rawData)
-        let decoded = try JSONDecoder().decode(SettingsExport.self, from: mergedData)
+        let settings = SettingsStore(defaults: defaults)
 
-        #expect(decoded.hotkeyBindings.first { $0.id == "openCommandPalette" }?.binding == KeyBinding(
-            keyCode: UInt32(kVK_Space),
-            modifiers: UInt32(controlKey | optionKey)
-        ))
+        #expect(settings.hotkeyBindings.first { $0.id == "openCommandPalette" }?.binding == .unassigned)
     }
 }
 
@@ -1308,6 +1514,7 @@ private func makeSettingsTestMonitor(
             monitorDisplayId: 101,
             enabled: false,
             showLabels: false,
+            showFloatingWindows: true,
             deduplicateAppIcons: true,
             hideEmptyWorkspaces: true,
             reserveLayoutSpace: true,
@@ -1392,6 +1599,7 @@ private func makeSettingsTestMonitor(
             id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
             monitorName: "LG UltraFine",
             monitorDisplayId: 202,
+            showFloatingWindows: true,
             reserveLayoutSpace: true,
             backgroundOpacity: 0.42
         )
@@ -1475,6 +1683,7 @@ private func makeSettingsTestMonitor(
             hotkeyBindings: imported.hotkeyBindings,
             workspaceBarEnabled: imported.workspaceBarEnabled,
             workspaceBarShowLabels: imported.workspaceBarShowLabels,
+            workspaceBarShowFloatingWindows: imported.workspaceBarShowFloatingWindows,
             workspaceBarWindowLevel: imported.workspaceBarWindowLevel.rawValue,
             workspaceBarPosition: imported.workspaceBarPosition.rawValue,
             workspaceBarNotchAware: imported.workspaceBarNotchAware,
@@ -1508,6 +1717,7 @@ private func makeSettingsTestMonitor(
             statusBarShowAppNames: imported.statusBarShowAppNames,
             statusBarUseWorkspaceId: imported.statusBarUseWorkspaceId,
             commandPaletteLastMode: imported.commandPaletteLastMode.rawValue,
+            animationsEnabled: imported.animationsEnabled,
             hiddenBarIsCollapsed: imported.hiddenBarIsCollapsed,
             quakeTerminalEnabled: imported.quakeTerminalEnabled,
             quakeTerminalPosition: imported.quakeTerminalPosition.rawValue,
@@ -1555,13 +1765,13 @@ private func makeSettingsTestMonitor(
         let reboundMonitor = makeSettingsTestMonitor(displayId: 77, name: "Studio Display")
         try imported.importSettings(from: exportURL, monitors: [reboundMonitor])
 
-        #expect(imported.workspaceConfigurations.count == 1)
-        #expect(imported.workspaceConfigurations.first?.name == "2")
+        #expect(imported.workspaceConfigurations.map(\.name) == ["2", "10"])
         #expect(imported.workspaceConfigurations.first?.displayName == "Code")
         #expect(
             imported.workspaceConfigurations.first?.monitorAssignment
                 == .specificDisplay(OutputId(displayId: reboundMonitor.displayId, name: reboundMonitor.name))
         )
+        #expect(imported.workspaceConfigurations.last?.monitorAssignment == .main)
     }
 
     @Test func importClearsStaleMonitorDisplayIdsWhenNoCurrentMatchExists() throws {
@@ -1634,6 +1844,7 @@ private func makeSettingsTestMonitor(
         #expect(settings.borderColorBlue == 0.97930003794467602)
         #expect(settings.hotkeyBindings == HotkeyBindingRegistry.defaults())
         #expect(settings.workspaceBarEnabled == true)
+        #expect(settings.workspaceBarShowFloatingWindows == false)
         #expect(settings.workspaceBarNotchAware == true)
         #expect(settings.workspaceBarReserveLayoutSpace == false)
         #expect(settings.appRules == BuiltInSettingsDefaults.appRules)
@@ -1672,6 +1883,7 @@ private func makeSettingsTestMonitor(
         #expect(settings.niriMaxVisibleColumns == exportDefaults.niriMaxVisibleColumns)
         #expect(settings.defaultLayoutType.rawValue == exportDefaults.defaultLayoutType)
         #expect(settings.borderWidth == exportDefaults.borderWidth)
+        #expect(settings.workspaceBarShowFloatingWindows == exportDefaults.workspaceBarShowFloatingWindows)
         #expect(settings.workspaceBarPosition.rawValue == exportDefaults.workspaceBarPosition)
         #expect(settings.dwindleDefaultSplitRatio == exportDefaults.dwindleDefaultSplitRatio)
         #expect(settings.scrollModifierKey.rawValue == exportDefaults.scrollModifierKey)
@@ -1754,7 +1966,7 @@ private func makeSettingsTestMonitor(
         #expect(reloaded.workspaceToMonitorAssignments()["2"] == [.output(output)])
     }
 
-    @Test func settingsStoreNormalizesWorkspaceConfigurationsToConfiguredNumericIds() {
+    @Test func settingsStoreNormalizesWorkspaceConfigurationsToPositiveNumericIds() {
         let defaults = makeTestDefaults()
         let rawConfigurations = [
             WorkspaceConfiguration(name: "2", monitorAssignment: .main),
@@ -1766,8 +1978,22 @@ private func makeSettingsTestMonitor(
 
         let settings = SettingsStore(defaults: defaults)
 
-        #expect(settings.workspaceConfigurations.map(\.name) == ["2"])
+        #expect(settings.workspaceConfigurations.map(\.name) == ["2", "10"])
         #expect(settings.workspaceConfigurations.first?.monitorAssignment == .main)
+    }
+
+    @Test func settingsStorePreservesHighWorkspaceIdsWithoutFallingBackToBuiltInDefaults() {
+        let defaults = makeTestDefaults()
+        let rawConfigurations = [
+            WorkspaceConfiguration(name: "10", monitorAssignment: .main),
+            WorkspaceConfiguration(name: "11", monitorAssignment: .secondary)
+        ]
+        defaults.set(try? JSONEncoder().encode(rawConfigurations), forKey: "settings.workspaceConfigurations")
+
+        let settings = SettingsStore(defaults: defaults)
+
+        #expect(settings.workspaceConfigurations.map(\.name) == ["10", "11"])
+        #expect(settings.workspaceConfigurations != BuiltInSettingsDefaults.workspaceConfigurations)
     }
 
     @Test func persistEffectiveMouseWarpMonitorOrderSeedsConnectedDisplaysWithoutDroppingStoredEntries() {

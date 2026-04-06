@@ -94,6 +94,11 @@ private struct GlobalBarSettingsSection: View {
                             controller.updateWorkspaceBarSettings()
                         }
 
+                    Toggle("Show Floating Windows", isOn: $settings.workspaceBarShowFloatingWindows)
+                        .onChange(of: settings.workspaceBarShowFloatingWindows) { _, _ in
+                            controller.updateWorkspaceBarSettings()
+                        }
+
                     Toggle("Deduplicate App Icons", isOn: $settings.workspaceBarDeduplicateAppIcons)
                         .onChange(of: settings.workspaceBarDeduplicateAppIcons) { _, _ in
                             controller.updateWorkspaceBarSettings()
@@ -109,7 +114,11 @@ private struct GlobalBarSettingsSection: View {
                         .onChange(of: settings.workspaceBarReserveLayoutSpace) { _, _ in
                             controller.updateWorkspaceBarSettings()
                         }
-                        .help("Reserve tiled layout space for the workspace bar. Overlapping Menu Bar uses the configured bar height; bars placed below the menu bar use the rendered bar height.")
+                        .help(
+                            "Reserve tiled layout space for the workspace bar. " +
+                            "Overlapping Menu Bar uses the configured bar height; " +
+                            "bars placed below the menu bar use the rendered bar height."
+                        )
 
                     Toggle("Notch-Aware Positioning", isOn: $settings.workspaceBarNotchAware)
                         .onChange(of: settings.workspaceBarNotchAware) { _, _ in
@@ -286,6 +295,14 @@ private struct MonitorBarSettingsSection: View {
                 )
 
                 OverridableToggle(
+                    label: "Show Floating Windows",
+                    value: ms.showFloatingWindows,
+                    globalValue: settings.workspaceBarShowFloatingWindows,
+                    onChange: { newValue in updateSetting { $0.showFloatingWindows = newValue } },
+                    onReset: { updateSetting { $0.showFloatingWindows = nil } }
+                )
+
+                OverridableToggle(
                     label: "Deduplicate App Icons",
                     value: ms.deduplicateAppIcons,
                     globalValue: settings.workspaceBarDeduplicateAppIcons,
@@ -309,7 +326,11 @@ private struct MonitorBarSettingsSection: View {
                     onChange: { newValue in updateSetting { $0.reserveLayoutSpace = newValue } },
                     onReset: { updateSetting { $0.reserveLayoutSpace = nil } }
                 )
-                .help("Reserve tiled layout space for the workspace bar. Overlapping Menu Bar uses the configured bar height; bars placed below the menu bar use the rendered bar height.")
+                .help(
+                    "Reserve tiled layout space for the workspace bar. " +
+                    "Overlapping Menu Bar uses the configured bar height; " +
+                    "bars placed below the menu bar use the rendered bar height."
+                )
 
                 OverridableToggle(
                     label: "Notch-Aware Positioning",

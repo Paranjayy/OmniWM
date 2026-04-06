@@ -1,3 +1,4 @@
+import COmniWMKernels
 import CoreGraphics
 import Foundation
 
@@ -37,74 +38,86 @@ func resolveWorkspaceRestoreAssignments(
         filteredSnapshots.append(snapshot)
     }
 
-    filteredSnapshots.sort { lhs, rhs in
-        snapshotSortKey(lhs.monitor) < snapshotSortKey(rhs.monitor)
+    guard !filteredSnapshots.isEmpty else { return [:] }
+
+    var snapshotInputs = ContiguousArray<omniwm_restore_snapshot>()
+    snapshotInputs.reserveCapacity(filteredSnapshots.count)
+    for snapshot in filteredSnapshots {
+        snapshotInputs.append(
+            omniwm_restore_snapshot(
+                display_id: snapshot.monitor.displayId,
+                anchor_x: snapshot.monitor.anchorPoint.x,
+                anchor_y: snapshot.monitor.anchorPoint.y,
+                frame_width: snapshot.monitor.frameSize.width,
+                frame_height: snapshot.monitor.frameSize.height
+            )
+        )
     }
 
-    let sortedMonitors = monitors.sorted { lhs, rhs in
-        monitorRestoreSortKey(lhs) < monitorRestoreSortKey(rhs)
+    var monitorInputs = ContiguousArray<omniwm_restore_monitor>()
+    monitorInputs.reserveCapacity(monitors.count)
+    for monitor in monitors {
+        monitorInputs.append(
+            omniwm_restore_monitor(
+                display_id: monitor.displayId,
+                frame_min_x: monitor.frame.minX,
+                frame_max_y: monitor.frame.maxY,
+                anchor_x: monitor.workspaceAnchorPoint.x,
+                anchor_y: monitor.workspaceAnchorPoint.y,
+                frame_width: monitor.frame.width,
+                frame_height: monitor.frame.height
+            )
+        )
     }
+
+    var namePenalties = ContiguousArray<UInt8>()
+    namePenalties.reserveCapacity(filteredSnapshots.count * monitors.count)
+    for snapshot in filteredSnapshots {
+        for monitor in monitors {
+            namePenalties.append(
+                snapshot.monitor.name.localizedCaseInsensitiveCompare(monitor.name) == .orderedSame ? 0 : 1
+            )
+        }
+    }
+
+    var rawAssignments = ContiguousArray(
+        repeating: omniwm_restore_assignment(snapshot_index: 0, monitor_index: 0),
+        count: min(filteredSnapshots.count, monitors.count)
+    )
+    var rawAssignmentCount = 0
+
+    let status = snapshotInputs.withUnsafeBufferPointer { snapshotBuffer in
+        monitorInputs.withUnsafeBufferPointer { monitorBuffer in
+            namePenalties.withUnsafeBufferPointer { penaltyBuffer in
+                rawAssignments.withUnsafeMutableBufferPointer { assignmentBuffer in
+                    omniwm_restore_resolve_assignments(
+                        snapshotBuffer.baseAddress,
+                        snapshotBuffer.count,
+                        monitorBuffer.baseAddress,
+                        monitorBuffer.count,
+                        penaltyBuffer.baseAddress,
+                        penaltyBuffer.count,
+                        assignmentBuffer.baseAddress,
+                        assignmentBuffer.count,
+                        &rawAssignmentCount
+                    )
+                }
+            }
+        }
+    }
+
+    precondition(
+        status == OMNIWM_KERNELS_STATUS_OK,
+        "omniwm_restore_resolve_assignments returned \(status)"
+    )
 
     var assignments: [Monitor.ID: WorkspaceDescriptor.ID] = [:]
-    var usedMonitorIds: Set<Monitor.ID> = []
+    assignments.reserveCapacity(rawAssignmentCount)
 
-    for snapshot in filteredSnapshots {
-        guard let exactMonitor = sortedMonitors.first(where: { $0.displayId == snapshot.monitor.displayId }) else {
-            continue
-        }
-        guard usedMonitorIds.insert(exactMonitor.id).inserted else { continue }
-        assignments[exactMonitor.id] = snapshot.workspaceId
-    }
-
-    for snapshot in filteredSnapshots where !assignments.values.contains(snapshot.workspaceId) {
-        let remaining = sortedMonitors.filter { !usedMonitorIds.contains($0.id) }
-        guard let best = remaining.min(by: { lhs, rhs in
-            isBetterRestoreCandidate(lhs, than: rhs, for: snapshot.monitor)
-        }) else {
-            continue
-        }
-
-        usedMonitorIds.insert(best.id)
-        assignments[best.id] = snapshot.workspaceId
+    for assignment in rawAssignments.prefix(rawAssignmentCount) {
+        assignments[monitors[Int(assignment.monitor_index)].id] =
+            filteredSnapshots[Int(assignment.snapshot_index)].workspaceId
     }
 
     return assignments
-}
-
-private func isBetterRestoreCandidate(_ lhs: Monitor, than rhs: Monitor, for snapshot: MonitorRestoreKey) -> Bool {
-    let lhsScore = restoreMatchScore(snapshot: snapshot, monitor: lhs)
-    let rhsScore = restoreMatchScore(snapshot: snapshot, monitor: rhs)
-
-    if lhsScore.namePenalty != rhsScore.namePenalty {
-        return lhsScore.namePenalty < rhsScore.namePenalty
-    }
-    if lhsScore.geometryDelta != rhsScore.geometryDelta {
-        return lhsScore.geometryDelta < rhsScore.geometryDelta
-    }
-    return monitorRestoreSortKey(lhs) < monitorRestoreSortKey(rhs)
-}
-
-private func restoreMatchScore(snapshot: MonitorRestoreKey, monitor: Monitor) -> (namePenalty: Int, geometryDelta: CGFloat) {
-    let namePenalty = snapshot.name.localizedCaseInsensitiveCompare(monitor.name) == .orderedSame ? 0 : 1
-    let anchorDistance = snapshot.anchorPoint.distanceSquared(to: monitor.workspaceAnchorPoint)
-    let widthDelta = abs(snapshot.frameSize.width - monitor.frame.width)
-    let heightDelta = abs(snapshot.frameSize.height - monitor.frame.height)
-    let geometryDelta = anchorDistance + widthDelta + heightDelta
-    return (namePenalty, geometryDelta)
-}
-
-private func snapshotSortKey(_ snapshot: MonitorRestoreKey) -> (CGFloat, CGFloat, UInt32) {
-    (snapshot.anchorPoint.x, -snapshot.anchorPoint.y, snapshot.displayId)
-}
-
-private func monitorRestoreSortKey(_ monitor: Monitor) -> (CGFloat, CGFloat, UInt32) {
-    (monitor.frame.minX, -monitor.frame.maxY, monitor.displayId)
-}
-
-private extension CGPoint {
-    func distanceSquared(to point: CGPoint) -> CGFloat {
-        let dx = x - point.x
-        let dy = y - point.y
-        return dx * dx + dy * dy
-    }
 }

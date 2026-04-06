@@ -251,6 +251,7 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case preselectClear = "preselect-clear"
     case openCommandPalette = "open-command-palette"
     case raiseAllFloatingWindows = "raise-all-floating-windows"
+    case rescueOffscreenWindows = "rescue-offscreen-windows"
     case toggleWorkspaceLayout = "toggle-workspace-layout"
     case setWorkspaceLayout = "set-workspace-layout"
     case toggleFullscreen = "toggle-fullscreen"
@@ -316,6 +317,7 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case preselectClear
     case openCommandPalette
     case raiseAllFloatingWindows
+    case rescueOffscreenWindows
     case toggleWorkspaceLayout
     case setWorkspaceLayout(layout: IPCWorkspaceLayout)
     case toggleFullscreen
@@ -407,6 +409,8 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .openCommandPalette
         case .raiseAllFloatingWindows:
             .raiseAllFloatingWindows
+        case .rescueOffscreenWindows:
+            .rescueOffscreenWindows
         case .toggleWorkspaceLayout:
             .toggleWorkspaceLayout
         case .setWorkspaceLayout:
@@ -590,6 +594,9 @@ public enum IPCCommandRequest: Equatable, Sendable {
         case .raiseAllFloatingWindows:
             try requireNoArguments()
             self = .raiseAllFloatingWindows
+        case .rescueOffscreenWindows:
+            try requireNoArguments()
+            self = .rescueOffscreenWindows
         case .toggleWorkspaceLayout:
             try requireNoArguments()
             self = .toggleWorkspaceLayout
@@ -754,6 +761,8 @@ extension IPCCommandRequest: Codable {
             self = .openCommandPalette
         case .raiseAllFloatingWindows:
             self = .raiseAllFloatingWindows
+        case .rescueOffscreenWindows:
+            self = .rescueOffscreenWindows
         case .toggleWorkspaceLayout:
             self = .toggleWorkspaceLayout
         case .setWorkspaceLayout:
@@ -869,6 +878,8 @@ extension IPCCommandRequest: Codable {
             break
         case .raiseAllFloatingWindows:
             break
+        case .rescueOffscreenWindows:
+            break
         case .toggleWorkspaceLayout:
             break
         case let .setWorkspaceLayout(layout):
@@ -913,6 +924,7 @@ public enum IPCQueryName: String, Codable, CaseIterable, Equatable, Sendable {
     case subscriptions
     case capabilities
     case focusedWindowDecision = "focused-window-decision"
+    case reconcileDebug = "reconcile-debug"
 }
 
 public struct IPCQuerySelectors: Codable, Equatable, Sendable {
@@ -1337,13 +1349,48 @@ public enum IPCWorkspaceActionName: String, Codable, Equatable, Sendable {
     case focusName = "focus-name"
 }
 
-public struct IPCWorkspaceRequest: Codable, Equatable, Sendable {
+public struct IPCWorkspaceRequest: Equatable, Sendable {
     public let name: IPCWorkspaceActionName
-    public let workspaceName: String
+    public let target: WorkspaceTarget
+
+    public var workspaceName: String {
+        target.legacyValue
+    }
+
+    public init(name: IPCWorkspaceActionName, target: WorkspaceTarget) {
+        self.name = name
+        self.target = target
+    }
 
     public init(name: IPCWorkspaceActionName, workspaceName: String) {
         self.name = name
-        self.workspaceName = workspaceName
+        target = WorkspaceTarget(resolvingLegacyValue: workspaceName)
+    }
+}
+
+extension IPCWorkspaceRequest: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case workspaceName
+        case workspaceTarget
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(IPCWorkspaceActionName.self, forKey: .name)
+        if let target = try container.decodeIfPresent(WorkspaceTarget.self, forKey: .workspaceTarget) {
+            self.target = target
+        } else {
+            let workspaceName = try container.decode(String.self, forKey: .workspaceName)
+            self.target = WorkspaceTarget(resolvingLegacyValue: workspaceName)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(workspaceName, forKey: .workspaceName)
+        try container.encode(target, forKey: .workspaceTarget)
     }
 }
 
@@ -1525,6 +1572,7 @@ public enum IPCResultKind: String, Codable, Equatable, Sendable {
     case subscriptions
     case capabilities
     case focusedWindowDecision = "focused-window-decision"
+    case reconcileDebug = "reconcile-debug"
     case subscribed
 }
 
@@ -2123,6 +2171,18 @@ public struct IPCFocusedWindowDecisionQueryResult: Codable, Equatable, Sendable 
     }
 }
 
+public struct IPCReconcileDebugQueryResult: Codable, Equatable, Sendable {
+    public let snapshot: String
+    public let trace: String
+    public let traceLimit: Int
+
+    public init(snapshot: String, trace: String, traceLimit: Int) {
+        self.snapshot = snapshot
+        self.trace = trace
+        self.traceLimit = traceLimit
+    }
+}
+
 public struct IPCResult: Codable, Equatable, Sendable {
     public enum Payload: Equatable, Sendable {
         case pong(IPCPingResult)
@@ -2142,6 +2202,7 @@ public struct IPCResult: Codable, Equatable, Sendable {
         case subscriptions(IPCSubscriptionsQueryResult)
         case capabilities(IPCCapabilitiesQueryResult)
         case focusedWindowDecision(IPCFocusedWindowDecisionQueryResult)
+        case reconcileDebug(IPCReconcileDebugQueryResult)
         case subscribed(IPCSubscribeResult)
     }
 
@@ -2221,6 +2282,10 @@ public struct IPCResult: Codable, Equatable, Sendable {
         self.init(kind: .focusedWindowDecision, payload: .focusedWindowDecision(focusedWindowDecision))
     }
 
+    public init(reconcileDebug: IPCReconcileDebugQueryResult) {
+        self.init(kind: .reconcileDebug, payload: .reconcileDebug(reconcileDebug))
+    }
+
     public init(subscribed: IPCSubscribeResult) {
         self.init(kind: .subscribed, payload: .subscribed(subscribed))
     }
@@ -2271,6 +2336,10 @@ public struct IPCResult: Codable, Equatable, Sendable {
             payload = .focusedWindowDecision(
                 try container.decode(IPCFocusedWindowDecisionQueryResult.self, forKey: .payload)
             )
+        case .reconcileDebug:
+            payload = .reconcileDebug(
+                try container.decode(IPCReconcileDebugQueryResult.self, forKey: .payload)
+            )
         case .subscribed:
             payload = .subscribed(try container.decode(IPCSubscribeResult.self, forKey: .payload))
         }
@@ -2314,6 +2383,8 @@ public struct IPCResult: Codable, Equatable, Sendable {
         case let .capabilities(payload):
             try container.encode(payload, forKey: .payload)
         case let .focusedWindowDecision(payload):
+            try container.encode(payload, forKey: .payload)
+        case let .reconcileDebug(payload):
             try container.encode(payload, forKey: .payload)
         case let .subscribed(payload):
             try container.encode(payload, forKey: .payload)

@@ -15,7 +15,7 @@ final class DwindleLayoutEngine {
     var displayRefreshRate: Double = 60.0
 
     func updateWindowConstraints(for token: WindowToken, constraints: WindowSizeConstraints) {
-        windowConstraints[token] = constraints
+        windowConstraints[token] = constraints.normalized()
     }
 
     func constraints(for token: WindowToken) -> WindowSizeConstraints {
@@ -310,8 +310,11 @@ final class DwindleLayoutEngine {
         }
 
         if let selectedId = selectedNodeId[workspaceId], selectedId == node.id {
-            let newSelected = parent.descendToFirstLeaf()
-            selectedNodeId[workspaceId] = newSelected.id
+            selectedNodeId[workspaceId] = parent.descendToFirstLeaf().id
+        }
+
+        if selectedNode(in: workspaceId) == nil {
+            selectedNodeId[workspaceId] = parent.descendToFirstLeaf().id
         }
     }
 
@@ -330,26 +333,50 @@ final class DwindleLayoutEngine {
     func syncWindows(
         _ tokens: [WindowToken],
         in workspaceId: WorkspaceDescriptor.ID,
-        focusedToken: WindowToken?
+        focusedToken: WindowToken?,
+        bootstrapScreen: CGRect? = nil
     ) -> Set<WindowToken> {
         let existingWindows = Set(roots[workspaceId]?.collectAllWindows() ?? [])
         let newWindows = Set(tokens)
 
         let toRemove = existingWindows.subtracting(newWindows)
-        let toAdd = newWindows.subtracting(existingWindows)
+        var queuedAdditions: Set<WindowToken> = []
+        var toAdd: [WindowToken] = []
+        toAdd.reserveCapacity(tokens.count)
+        for token in tokens where !existingWindows.contains(token) {
+            guard queuedAdditions.insert(token).inserted else { continue }
+            toAdd.append(token)
+        }
 
         for token in toRemove {
             removeWindow(token: token, from: workspaceId)
+        }
+
+        let shouldBootstrapIncrementally = bootstrapScreen != nil
+            && !tokens.isEmpty
+            && currentFrames(in: workspaceId).isEmpty
+        if shouldBootstrapIncrementally,
+           let bootstrapScreen,
+           windowCount(in: workspaceId) > 0
+        {
+            _ = calculateLayout(for: workspaceId, screen: bootstrapScreen)
         }
 
         var activeFrame: CGRect?
         if let focusedToken, let node = tokenToNode[focusedToken] {
             activeFrame = node.cachedFrame
         }
+        if activeFrame == nil {
+            activeFrame = selectedNode(in: workspaceId)?.cachedFrame
+                ?? roots[workspaceId]?.descendToFirstLeaf().cachedFrame
+        }
 
         for token in toAdd {
             addWindow(token: token, to: workspaceId, activeWindowFrame: activeFrame)
-            if let newNode = tokenToNode[token] {
+            if shouldBootstrapIncrementally, let bootstrapScreen {
+                let frames = calculateLayout(for: workspaceId, screen: bootstrapScreen)
+                activeFrame = frames[token]
+            } else if let newNode = tokenToNode[token] {
                 activeFrame = newNode.cachedFrame
             }
         }
@@ -1072,7 +1099,8 @@ final class DwindleLayoutEngine {
 
     func animateWindowMovements(
         oldFrames: [WindowToken: CGRect],
-        newFrames: [WindowToken: CGRect]
+        newFrames: [WindowToken: CGRect],
+        motion: MotionSnapshot
     ) {
         for (handle, newFrame) in newFrames {
             guard let oldFrame = oldFrames[handle],
@@ -1088,7 +1116,8 @@ final class DwindleLayoutEngine {
                     oldFrame: oldFrame,
                     newFrame: newFrame,
                     clock: animationClock,
-                    config: windowMovementAnimationConfig
+                    config: windowMovementAnimationConfig,
+                    animated: motion.animationsEnabled
                 )
             }
         }

@@ -158,3 +158,56 @@ better touch tool config - '/Users/paranjay/Library/Application Support/BetterTo
 - [x] Custom build script & settings patcher.
 - [x] Root cleaned & configs synced.
 - [x] Cmd+Y: Instant Float + 1194x947pt resize + Center shortcut.
+
+---
+
+## �� Tier 9 — LLM & Agentic Integration
+> *The "Beyond Window Management" Spectrum.*
+
+### 21. LLM Context Bridge (muni)
+- Script to dump current window metadata (titles, bundleIds, layout) to `/tmp/context.json`.
+- Pipe this context to Raycast/BTT agents to perform semantic window management.
+
+### 22. "Intent-Based" Layouts
+- "Arrange my screen for React development" → LLM moves IDE to main, Browser to right, DevTools to bottom.
+- Uses the IPC Playground (Tier 7) to command OmniWM.
+
+### 23. AI Activity Digest
+- HUD that summarizes what you've worked on across all workspaces (using LLM analysis of window titles).
+
+---
+
+## 💎 Tier 10 — The "muni" Specials (Creative Layer)
+> *Bespoke UX refinements for the God Build connoisseur.*
+
+### 24. RCmd+Y: The "God Float" Toggle (muni)
+- Intelligent toggle: First press floats & centers at 1194x947. Second press unfloats & restores to tiling.
+- **Implemented:** Pure script layer for binary compatibility.
+
+### 25. The "Zen Dimmer" (Concept)
+- Hold `ROpt + Z` → Use AppleScript to briefly set Gamma or Desktop Brightness to 20% for everything *except* the frontmost window. 
+- Creates a "Spotlight" effect for deep focus.
+
+### 26. Intelligent Layer HUD
+- Small, vertical pixel-bar on the far right of the screen that changes color based on which RCmd/ROpt layer is active (Purple for God, Blue for Official).
+
+---
+
+## 🔱 Tier 11 — The Karabiner & BTT Nexus
+> *High-fidelity automation and visualization layer.*
+
+### 27. Dynamic Shortcut HUD (muni)
+- Use BTT's **Floating Webview** to show a "Cheat Sheet" that changes in real-time based on your Karabiner Layer (**RCmd**, **ROpt**).
+- **How:** Karabiner `shell_command` calls BTT AppleScript to update the HUD content.
+
+### 28. "Ghostty Whisperer" (muni)
+- Hold `RCmd + G` → Use BTT to dim the wallpaper and bring Ghostty to focus in a 90% wide central overlay. 
+- Releases focus and restores wallpaper immediately on key release.
+
+### 29. Contextual Tap-Sequences
+- **Single Tap RCmd:** Toggle Workspace Bar.
+- **Double Tap RCmd:** Open OmniWM Command Palette.
+- **Triple Tap RCmd:** Engage Zen Mode (Mute all notifications + Hide tiling gaps).
+
+### 30. Smart Profile Switching
+- Use BTT to detect when you open a "Hobby" app (e.g. Spotify, Discord) and automatically tell OmniWM to switch to the **"Relax"** profile (bigger gaps, softer colors).

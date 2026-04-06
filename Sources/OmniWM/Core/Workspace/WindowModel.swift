@@ -141,6 +141,11 @@ final class WindowModel {
         var axRef: AXWindowRef
         var workspaceId: WorkspaceDescriptor.ID
         var mode: TrackedWindowMode
+        var lifecyclePhase: WindowLifecyclePhase
+        var observedState: ObservedWindowState
+        var desiredState: DesiredWindowState
+        var restoreIntent: RestoreIntent?
+        var replacementCorrelation: ReplacementCorrelation?
         var managedReplacementMetadata: ManagedReplacementMetadata?
         var floatingState: FloatingState?
         var manualLayoutOverride: ManualWindowOverride?
@@ -164,6 +169,11 @@ final class WindowModel {
             axRef: AXWindowRef,
             workspaceId: WorkspaceDescriptor.ID,
             mode: TrackedWindowMode,
+            lifecyclePhase: WindowLifecyclePhase? = nil,
+            observedState: ObservedWindowState? = nil,
+            desiredState: DesiredWindowState? = nil,
+            restoreIntent: RestoreIntent? = nil,
+            replacementCorrelation: ReplacementCorrelation? = nil,
             managedReplacementMetadata: ManagedReplacementMetadata?,
             floatingState: FloatingState?,
             manualLayoutOverride: ManualWindowOverride?,
@@ -174,6 +184,18 @@ final class WindowModel {
             self.axRef = axRef
             self.workspaceId = workspaceId
             self.mode = mode
+            self.lifecyclePhase = lifecyclePhase ?? (mode == .floating ? .floating : .tiled)
+            self.observedState = observedState ?? .initial(
+                workspaceId: workspaceId,
+                monitorId: nil
+            )
+            self.desiredState = desiredState ?? .initial(
+                workspaceId: workspaceId,
+                monitorId: nil,
+                disposition: mode
+            )
+            self.restoreIntent = restoreIntent
+            self.replacementCorrelation = replacementCorrelation
             self.managedReplacementMetadata = managedReplacementMetadata
             self.floatingState = floatingState
             self.manualLayoutOverride = manualLayoutOverride
@@ -371,6 +393,8 @@ final class WindowModel {
         if oldToken == newToken {
             guard let entry = entries[oldToken] else { return nil }
             entry.axRef = newAXRef
+            entry.cachedConstraints = nil
+            entry.constraintsCacheTime = nil
             if let managedReplacementMetadata {
                 entry.managedReplacementMetadata = managedReplacementMetadata
             }
@@ -385,6 +409,8 @@ final class WindowModel {
 
         entry.handle.id = newToken
         entry.axRef = newAXRef
+        entry.cachedConstraints = nil
+        entry.constraintsCacheTime = nil
         if let managedReplacementMetadata {
             entry.managedReplacementMetadata = managedReplacementMetadata
         }
@@ -518,6 +544,54 @@ final class WindowModel {
         entries[token]?.manualLayoutOverride = override
     }
 
+    func lifecyclePhase(for token: WindowToken) -> WindowLifecyclePhase? {
+        entries[token]?.lifecyclePhase
+    }
+
+    func setLifecyclePhase(_ phase: WindowLifecyclePhase, for token: WindowToken) {
+        entries[token]?.lifecyclePhase = phase
+    }
+
+    func observedState(for token: WindowToken) -> ObservedWindowState? {
+        entries[token]?.observedState
+    }
+
+    func setObservedState(_ state: ObservedWindowState, for token: WindowToken) {
+        entries[token]?.observedState = state
+    }
+
+    func desiredState(for token: WindowToken) -> DesiredWindowState? {
+        entries[token]?.desiredState
+    }
+
+    func setDesiredState(_ state: DesiredWindowState, for token: WindowToken) {
+        entries[token]?.desiredState = state
+    }
+
+    func restoreIntent(for token: WindowToken) -> RestoreIntent? {
+        entries[token]?.restoreIntent
+    }
+
+    func setRestoreIntent(_ intent: RestoreIntent?, for token: WindowToken) {
+        entries[token]?.restoreIntent = intent
+    }
+
+    func replacementCorrelation(for token: WindowToken) -> ReplacementCorrelation? {
+        entries[token]?.replacementCorrelation
+    }
+
+    func setReplacementCorrelation(_ correlation: ReplacementCorrelation?, for token: WindowToken) {
+        entries[token]?.replacementCorrelation = correlation
+    }
+
+    func managedReplacementMetadata(for token: WindowToken) -> ManagedReplacementMetadata? {
+        entries[token]?.managedReplacementMetadata
+    }
+
+    func setManagedReplacementMetadata(_ metadata: ManagedReplacementMetadata?, for token: WindowToken) {
+        entries[token]?.managedReplacementMetadata = metadata
+    }
+
     func setHiddenState(_ state: HiddenState?, for token: WindowToken) {
         guard let entry = entries[token] else { return }
         if let state {
@@ -573,11 +647,9 @@ final class WindowModel {
         return prevKind
     }
 
-    @discardableResult
-    func removeMissing(keys activeKeys: Set<WindowKey>, requiredConsecutiveMisses: Int = 1) -> [Entry] {
+    func confirmedMissingKeys(keys activeKeys: Set<WindowKey>, requiredConsecutiveMisses: Int = 1) -> [WindowKey] {
         let threshold = max(1, requiredConsecutiveMisses)
         let knownTokens = Array(entries.keys)
-        var removedEntries: [Entry] = []
 
         for token in knownTokens where activeKeys.contains(token) {
             missingDetectionCountByToken.removeValue(forKey: token)
@@ -601,19 +673,11 @@ final class WindowModel {
             }
         }
 
-        for token in confirmedMissing {
-            if let entry = entries[token] {
-                removedEntries.append(entry)
-                removeIndexes(for: entry, token: token, windowId: token.windowId)
-            }
-            entries.removeValue(forKey: token)
-        }
-
         if !missingDetectionCountByToken.isEmpty {
             missingDetectionCountByToken = missingDetectionCountByToken.filter { entries[$0.key] != nil }
         }
 
-        return removedEntries
+        return confirmedMissing
     }
 
     @discardableResult
@@ -638,7 +702,7 @@ final class WindowModel {
 
     func setCachedConstraints(_ constraints: WindowSizeConstraints, for token: WindowToken) {
         guard let entry = entries[token] else { return }
-        entry.cachedConstraints = constraints
+        entry.cachedConstraints = constraints.normalized()
         entry.constraintsCacheTime = Date()
     }
 }

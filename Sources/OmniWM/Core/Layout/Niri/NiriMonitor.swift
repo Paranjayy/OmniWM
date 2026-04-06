@@ -92,10 +92,15 @@ extension NiriMonitor {
     func startWorkspaceSwitch(
         orderedWorkspaceIds: [WorkspaceDescriptor.ID],
         from fromWorkspaceId: WorkspaceDescriptor.ID,
-        to toWorkspaceId: WorkspaceDescriptor.ID
+        to toWorkspaceId: WorkspaceDescriptor.ID,
+        animated: Bool
     ) {
         guard let targetIdx = orderedWorkspaceIds.firstIndex(of: toWorkspaceId),
               let fromIdx = orderedWorkspaceIds.firstIndex(of: fromWorkspaceId) else {
+            return
+        }
+        guard animated else {
+            workspaceSwitch = nil
             return
         }
         guard targetIdx != fromIdx || workspaceSwitch != nil else { return }
@@ -118,13 +123,13 @@ extension NiriMonitor {
     }
 
     func tickWorkspaceSwitchAnimation(at time: TimeInterval) -> Bool {
-        guard var switch_ = workspaceSwitch else { return false }
+        guard var workspaceSwitch = workspaceSwitch else { return false }
 
-        let running = switch_.tick(at: time)
+        let running = workspaceSwitch.tick(at: time)
         if running {
-            workspaceSwitch = switch_
+            self.workspaceSwitch = workspaceSwitch
         } else {
-            workspaceSwitch = nil
+            self.workspaceSwitch = nil
         }
         return running
     }

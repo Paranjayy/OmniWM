@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-private let VIEW_GESTURE_WORKING_AREA_MOVEMENT: Double = 1200.0
+private let viewGestureWorkingAreaMovement: Double = 1200.0
 
 extension ViewportState {
     mutating func beginGesture(isTrackpad: Bool) {
@@ -24,7 +24,7 @@ extension ViewportState {
         gesture.tracker.push(delta: Double(deltaPixels), timestamp: timestamp)
 
         let normFactor = gesture.isTrackpad
-            ? Double(viewportWidth) / VIEW_GESTURE_WORKING_AREA_MOVEMENT
+            ? Double(viewportWidth) / viewGestureWorkingAreaMovement
             : 1.0
         let pos = gesture.tracker.position * normFactor
         let viewOffset = pos + gesture.deltaFromTracker
@@ -62,6 +62,7 @@ extension ViewportState {
         columns: [NiriContainer],
         gap: CGFloat,
         viewportWidth: CGFloat,
+        motion: MotionSnapshot,
         centerMode: CenterFocusedColumn = .never,
         alwaysCenterSingleColumn: Bool = false
     ) {
@@ -73,7 +74,7 @@ extension ViewportState {
         let currentOffset = gesture.current()
 
         let normFactor = gesture.isTrackpad
-            ? Double(viewportWidth) / VIEW_GESTURE_WORKING_AREA_MOVEMENT
+            ? Double(viewportWidth) / viewGestureWorkingAreaMovement
             : 1.0
         let projectedTrackerPos = gesture.tracker.projectedEndPosition() * normFactor
         let projectedOffset = projectedTrackerPos + gesture.deltaFromTracker
@@ -103,6 +104,14 @@ extension ViewportState {
         let maxOffset: Double = 0
         let minOffset = Double(viewportWidth - totalW)
         let clampedTarget = min(max(targetOffset, minOffset), maxOffset)
+
+        guard motion.animationsEnabled else {
+            viewOffsetPixels = .static(CGFloat(clampedTarget))
+            activatePrevColumnOnRemoval = nil
+            viewOffsetToRestore = nil
+            selectionProgress = 0.0
+            return
+        }
 
         let now = animationClock?.now() ?? CACurrentMediaTime()
         let animation = SpringAnimation(

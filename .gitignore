@@ -1,5 +1,10 @@
 # OmniWM Master Gitignore
 
+# Build artifacts
+.build/
+Zig/omniwm_kernels/.zig-cache/
+Zig/omniwm_kernels/zig-out/
+
 # Binary Databases (The stalling culprits)
 *.mdb
 *.lock

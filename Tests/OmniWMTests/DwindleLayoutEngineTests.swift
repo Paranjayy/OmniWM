@@ -23,6 +23,43 @@ private func layoutTokenSet(_ changes: [LayoutFrameChange]) -> Set<WindowToken> 
     Set(changes.map(\.token))
 }
 
+private func applyResolvedDwindleSettingsForEngineTests(
+    _ settings: ResolvedDwindleSettings,
+    to engine: DwindleLayoutEngine
+) {
+    engine.settings.smartSplit = settings.smartSplit
+    engine.settings.defaultSplitRatio = settings.defaultSplitRatio
+    engine.settings.splitWidthMultiplier = settings.splitWidthMultiplier
+    engine.settings.singleWindowAspectRatio = settings.singleWindowAspectRatio.size
+    engine.settings.innerGap = settings.innerGap
+    engine.settings.outerGapTop = settings.outerGapTop
+    engine.settings.outerGapBottom = settings.outerGapBottom
+    engine.settings.outerGapLeft = settings.outerGapLeft
+    engine.settings.outerGapRight = settings.outerGapRight
+}
+
+private func warmReferenceDwindleImportForEngineTests(
+    tokens: [WindowToken],
+    screen: CGRect,
+    settings: ResolvedDwindleSettings
+) -> (order: [WindowToken], frames: [WindowToken: CGRect]) {
+    let engine = DwindleLayoutEngine()
+    let workspaceId = UUID()
+    applyResolvedDwindleSettingsForEngineTests(settings, to: engine)
+
+    var activeFrame: CGRect?
+    for token in tokens {
+        _ = engine.addWindow(token: token, to: workspaceId, activeWindowFrame: activeFrame)
+        let frames = engine.calculateLayout(for: workspaceId, screen: screen)
+        activeFrame = frames[token]
+    }
+
+    return (
+        order: engine.root(for: workspaceId)?.collectAllWindows() ?? [],
+        frames: engine.currentFrames(in: workspaceId)
+    )
+}
+
 @MainActor
 private func configureWorkspaceAsDwindle(
     on controller: WMController,
@@ -129,6 +166,97 @@ private func configureWorkspacesAsDwindle(
         )
         #expect(Set(updatedFrames.keys) == Set([handle1.id]))
         #expect(engine.findNode(for: handle2.id) == nil)
+    }
+
+    @Test func syncWindowsPreservesCallerOrderForFreshLayouts() {
+        let forwardEngine = DwindleLayoutEngine()
+        let reverseEngine = DwindleLayoutEngine()
+        let wsId = UUID()
+        let handleA = makeTestHandle(pid: 141)
+        let handleB = makeTestHandle(pid: 142)
+        let handleC = makeTestHandle(pid: 143)
+        let forwardOrder = [handleA, handleB, handleC]
+        let reverseOrder = [handleC, handleB, handleA]
+
+        _ = forwardEngine.syncWindows(forwardOrder, in: wsId, focusedHandle: nil)
+        _ = reverseEngine.syncWindows(reverseOrder, in: wsId, focusedHandle: nil)
+
+        guard let forwardRoot = forwardEngine.root(for: wsId),
+              let reverseRoot = reverseEngine.root(for: wsId)
+        else {
+            Issue.record("Expected Dwindle roots for fresh sync order test")
+            return
+        }
+
+        #expect(forwardRoot.collectAllWindows() == forwardOrder.map(\.id))
+        #expect(reverseRoot.collectAllWindows() == reverseOrder.map(\.id))
+        #expect(forwardEngine.selectedNode(in: wsId)?.windowToken == handleC.id)
+        #expect(reverseEngine.selectedNode(in: wsId)?.windowToken == handleA.id)
+
+        let screen = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        let forwardFrames = forwardEngine.calculateLayout(for: wsId, screen: screen)
+        let reverseFrames = reverseEngine.calculateLayout(for: wsId, screen: screen)
+        #expect(forwardFrames != reverseFrames)
+    }
+
+    @Test func coldBootstrapSyncMatchesWarmIncrementalReference() {
+        let engine = DwindleLayoutEngine()
+        let wsId = UUID()
+        let handles = [
+            makeTestHandle(pid: 241),
+            makeTestHandle(pid: 242),
+            makeTestHandle(pid: 243)
+        ]
+        let tokens = handles.map(\.id)
+        let screen = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        let settings = ResolvedDwindleSettings(
+            smartSplit: true,
+            defaultSplitRatio: 1.0,
+            splitWidthMultiplier: 0.85,
+            singleWindowAspectRatio: .fill,
+            useGlobalGaps: false,
+            innerGap: 12,
+            outerGapTop: 16,
+            outerGapBottom: 10,
+            outerGapLeft: 14,
+            outerGapRight: 18
+        )
+        applyResolvedDwindleSettingsForEngineTests(settings, to: engine)
+
+        _ = engine.syncWindows(
+            tokens,
+            in: wsId,
+            focusedToken: tokens.first,
+            bootstrapScreen: screen
+        )
+        let coldFrames = engine.calculateLayout(for: wsId, screen: screen)
+        let warmReference = warmReferenceDwindleImportForEngineTests(
+            tokens: tokens,
+            screen: screen,
+            settings: settings
+        )
+
+        #expect(engine.root(for: wsId)?.collectAllWindows() == warmReference.order)
+        #expect(coldFrames == warmReference.frames)
+    }
+
+    @Test func selectionSurvivesSiblingCollapseAfterRemoval() {
+        let engine = DwindleLayoutEngine()
+        let wsId = UUID()
+        let left = makeTestHandle(pid: 81)
+        let right = makeTestHandle(pid: 82)
+
+        _ = engine.syncWindows([left, right], in: wsId, focusedHandle: left)
+        guard let rightNode = engine.findNode(for: right.id) else {
+            Issue.record("Expected surviving sibling node for Dwindle removal regression test")
+            return
+        }
+
+        engine.setSelectedNode(rightNode, in: wsId)
+        engine.removeWindow(token: left.id, from: wsId)
+
+        #expect(engine.selectedNode(in: wsId)?.windowToken == right.id)
+        #expect(engine.toggleFullscreen(in: wsId) == right.id)
     }
 
     @Test func focusHitTestMissesEmptyWorkspace() {
@@ -352,6 +480,51 @@ private func configureWorkspacesAsDwindle(
 
         #expect(controller.dwindleLayoutHandler.dwindleAnimationByDisplay[monitor.displayId]?.0 == workspaceId)
         #expect(lastAppliedBorderWindowIdForLayoutPlanTests(on: controller) == 703)
+    }
+
+    @Test @MainActor func fullscreenRelayoutSuppressesFocusedBorder() async throws {
+        let controller = makeLayoutPlanTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing monitor or workspace for fullscreen border regression test")
+            return
+        }
+
+        configureWorkspaceAsDwindle(on: controller, workspaceId: workspaceId)
+        controller.enableDwindleLayout()
+        controller.setBordersEnabled(true)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        guard let engine = controller.dwindleEngine else {
+            Issue.record("Missing Dwindle engine for fullscreen border regression test")
+            return
+        }
+
+        let firstToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 707)
+        _ = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 708)
+        _ = controller.workspaceManager.setManagedFocus(firstToken, in: workspaceId, onMonitor: monitor.id)
+
+        let initialPlans = try await controller.dwindleLayoutHandler.layoutWithDwindleEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(initialPlans)
+        #expect(lastAppliedBorderWindowIdForLayoutPlanTests(on: controller) == 707)
+
+        guard let fullscreenNode = engine.findNode(for: firstToken) else {
+            Issue.record("Missing Dwindle node for fullscreen border regression test")
+            return
+        }
+
+        engine.setSelectedNode(fullscreenNode, in: workspaceId)
+        #expect(engine.toggleFullscreen(in: workspaceId) == firstToken)
+
+        let fullscreenPlans = try await controller.dwindleLayoutHandler.layoutWithDwindleEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(fullscreenPlans)
+
+        #expect(lastAppliedBorderWindowIdForLayoutPlanTests(on: controller) == nil)
+        #expect(lastAppliedBorderFrameForLayoutPlanTests(on: controller) == nil)
     }
 
     @Test @MainActor func activeAnimationTickKeepsBorderHiddenDuringPreservedNonManagedFocus() async throws {

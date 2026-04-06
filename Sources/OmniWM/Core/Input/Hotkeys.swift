@@ -2,6 +2,21 @@ import AppKit
 import Carbon
 import Foundation
 
+struct HotkeyPlannedRegistration: Equatable {
+    let binding: KeyBinding
+    let command: HotkeyCommand
+}
+
+enum HotkeyRegistrationFailureReason: Equatable {
+    case duplicateBinding
+    case systemReserved
+}
+
+struct HotkeyRegistrationPlan: Equatable {
+    let registrations: [HotkeyPlannedRegistration]
+    let failures: [HotkeyCommand: HotkeyRegistrationFailureReason]
+}
+
 final class HotkeyCenter {
     var onCommand: ((HotkeyCommand) -> Void)?
 
@@ -12,7 +27,7 @@ final class HotkeyCenter {
 
     private var bindings: [HotkeyBinding] = []
 
-    private(set) var registrationFailures: Set<HotkeyCommand> = []
+    private(set) var registrationFailures: [HotkeyCommand: HotkeyRegistrationFailureReason] = [:]
 
     func start() {
         guard !isRunning else { return }
@@ -69,18 +84,16 @@ final class HotkeyCenter {
 
     private func registerHotkeys() {
         unregisterAll()
-        registrationFailures.removeAll()
+        let plan = Self.registrationPlan(for: bindings)
+        registrationFailures = plan.failures
         var nextId: UInt32 = 1
 
-        for binding in bindings {
-            if binding.binding.isUnassigned {
-                continue
-            }
+        for registration in plan.registrations {
             var ref: EventHotKeyRef?
             let hotKeyID = EventHotKeyID(signature: OSType(0x4F4D_4E49), id: nextId)
             let status = RegisterEventHotKey(
-                binding.binding.keyCode,
-                binding.binding.modifiers,
+                registration.binding.keyCode,
+                registration.binding.modifiers,
                 hotKeyID,
                 GetApplicationEventTarget(),
                 0,
@@ -88,9 +101,9 @@ final class HotkeyCenter {
             )
             if status == noErr, let ref {
                 refs.append(ref)
-                idToCommand[nextId] = binding.command
+                idToCommand[nextId] = registration.command
             } else {
-                registrationFailures.insert(binding.command)
+                registrationFailures[registration.command] = .systemReserved
             }
             nextId += 1
         }
@@ -99,5 +112,47 @@ final class HotkeyCenter {
     private func dispatch(id: UInt32) {
         guard let command = idToCommand[id] else { return }
         onCommand?(command)
+    }
+}
+
+extension HotkeyCenter {
+    static func registrationPlan(for bindings: [HotkeyBinding]) -> HotkeyRegistrationPlan {
+        var ownersByBinding: [KeyBinding: Set<HotkeyCommand>] = [:]
+        var commandBindings: [(command: HotkeyCommand, binding: KeyBinding?)] = []
+
+        for binding in bindings {
+            let validBinding = binding.binding.isUnassigned ? nil : binding.binding
+            if let validBinding {
+                ownersByBinding[validBinding, default: []].insert(binding.command)
+            }
+            commandBindings.append((command: binding.command, binding: validBinding))
+        }
+
+        let conflictedBindings = Set(
+            ownersByBinding.compactMap { binding, owners in
+                owners.count > 1 ? binding : nil
+            }
+        )
+
+        var registrations: [HotkeyPlannedRegistration] = []
+        var failures: [HotkeyCommand: HotkeyRegistrationFailureReason] = [:]
+
+        for commandBinding in commandBindings {
+            if let binding = commandBinding.binding, conflictedBindings.contains(binding) {
+                failures[commandBinding.command] = .duplicateBinding
+                continue
+            }
+
+            if let binding = commandBinding.binding {
+                registrations.append(
+                    HotkeyPlannedRegistration(
+                        binding: binding,
+                        command: commandBinding.command
+                    )
+                )
+            }
+        }
+
+        return HotkeyRegistrationPlan(registrations: registrations, failures: failures)
     }
 }

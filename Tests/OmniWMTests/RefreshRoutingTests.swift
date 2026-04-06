@@ -95,6 +95,7 @@ private func cleanupRefreshTestController(_ controller: WMController) {
     controller.layoutRefreshController.resetState()
     controller.resetWorkspaceBarRefreshDebugStateForTests()
     controller.axManager.currentWindowsAsyncOverride = nil
+    controller.axManager.fullRescanEnumerationOverrideForTests = nil
     controller.axManager.frameApplyOverrideForTests = nil
     controller.axEventHandler.resetDebugStateForTests()
     controller.axEventHandler.isFullscreenProvider = nil
@@ -144,6 +145,64 @@ private func niriColumnTokenSnapshot(
     }
 }
 
+@MainActor
+private func workspaceManagerTokenSet(
+    controller: WMController,
+    workspaceId: WorkspaceDescriptor.ID
+) -> Set<WindowToken> {
+    Set(controller.workspaceManager.entries(in: workspaceId).map(\.token))
+}
+
+@MainActor
+private func niriTokenSet(
+    controller: WMController,
+    workspaceId: WorkspaceDescriptor.ID
+) -> Set<WindowToken> {
+    controller.niriEngine?.root(for: workspaceId)?.windowIdSet ?? []
+}
+
+@MainActor
+private func dwindleTokenSet(
+    controller: WMController,
+    workspaceId: WorkspaceDescriptor.ID
+) -> Set<WindowToken> {
+    Set(controller.dwindleEngine?.root(for: workspaceId)?.collectAllWindows() ?? [])
+}
+
+private func applyResolvedDwindleSettingsForRefreshTests(
+    _ settings: ResolvedDwindleSettings,
+    to engine: DwindleLayoutEngine
+) {
+    engine.settings.smartSplit = settings.smartSplit
+    engine.settings.defaultSplitRatio = settings.defaultSplitRatio
+    engine.settings.splitWidthMultiplier = settings.splitWidthMultiplier
+    engine.settings.singleWindowAspectRatio = settings.singleWindowAspectRatio.size
+    engine.settings.innerGap = settings.innerGap
+    engine.settings.outerGapTop = settings.outerGapTop
+    engine.settings.outerGapBottom = settings.outerGapBottom
+    engine.settings.outerGapLeft = settings.outerGapLeft
+    engine.settings.outerGapRight = settings.outerGapRight
+}
+
+private func warmReferenceDwindleFramesForRefreshTests(
+    tokens: [WindowToken],
+    screen: CGRect,
+    settings: ResolvedDwindleSettings
+) -> [WindowToken: CGRect] {
+    let engine = DwindleLayoutEngine()
+    let workspaceId = UUID()
+    applyResolvedDwindleSettingsForRefreshTests(settings, to: engine)
+
+    var activeFrame: CGRect?
+    for token in tokens {
+        _ = engine.addWindow(token: token, to: workspaceId, activeWindowFrame: activeFrame)
+        let frames = engine.calculateLayout(for: workspaceId, screen: screen)
+        activeFrame = frames[token]
+    }
+
+    return engine.currentFrames(in: workspaceId)
+}
+
 private func replacingToken(
     _ token: WindowToken,
     with replacement: WindowToken,
@@ -164,8 +223,11 @@ private func workspaceBarWindowCount(
     }
     return controller.workspaceBarItems(
         for: monitor,
-        deduplicate: false,
-        hideEmpty: false
+        projection: WorkspaceBarProjectionOptions(
+            deduplicateAppIcons: false,
+            hideEmptyWorkspaces: false,
+            showFloatingWindows: controller.settings.workspaceBarShowFloatingWindows
+        )
     )
     .first { $0.id == workspaceId }?
     .windows.count
@@ -278,11 +340,13 @@ private func configureWorkspaceLayouts(
     on controller: WMController,
     layoutsByName: [String: LayoutType]
 ) {
+    let existingConfigurationsByName = Dictionary(
+        uniqueKeysWithValues: controller.settings.workspaceConfigurations.map { ($0.name, $0) }
+    )
     controller.settings.workspaceConfigurations = layoutsByName.keys.sorted().map { name in
-        WorkspaceConfiguration(
-            name: name,
-            layoutType: layoutsByName[name] ?? .defaultLayout
-        )
+        let layoutType = layoutsByName[name] ?? .defaultLayout
+        return existingConfigurationsByName[name]?.with(layoutType: layoutType)
+            ?? WorkspaceConfiguration(name: name, layoutType: layoutType)
     }
 }
 
@@ -885,6 +949,61 @@ private func prepareNiriState(
         assertNoLegacyReasons(recorder)
     }
 
+    @Test @MainActor func reselectingActiveWorkspaceDoesNotTriggerRefreshOrClearBorder() async {
+        let controller = makeRefreshTestController()
+        guard let workspaceOne = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let workspaceTwo = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
+              let monitor = controller.workspaceManager.monitors.first
+        else {
+            Issue.record("Failed to create active workspace reselect fixture")
+            return
+        }
+
+        let handles = await prepareNiriState(
+            on: controller,
+            assignments: [
+                (workspaceOne, 352),
+                (workspaceTwo, 353),
+            ],
+            focusedWindowId: 352,
+            ensureWorkspaces: [workspaceTwo]
+        )
+        guard let targetHandle = handles[353] else {
+            Issue.record("Missing target workspace handle")
+            return
+        }
+
+        #expect(controller.workspaceManager.setActiveWorkspace(workspaceTwo, on: monitor.id))
+        #expect(controller.workspaceManager.setManagedFocus(
+            targetHandle.id,
+            in: workspaceTwo,
+            onMonitor: monitor.id
+        ))
+        primeFocusedBorder(on: controller, handle: targetHandle)
+
+        let recorder = RefreshEventRecorder()
+        installRefreshSpies(on: controller, recorder: recorder)
+
+        let previousFocusedToken = controller.workspaceManager.focusedToken
+        let previousBorderWindowId = lastAppliedBorderWindowId(on: controller)
+
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForRefreshWork(on: controller)
+
+        #expect(controller.activeWorkspace()?.id == workspaceTwo)
+        #expect(controller.workspaceManager.focusedToken == previousFocusedToken)
+        #expect(controller.workspaceManager.focusedToken == targetHandle.id)
+        #expect(lastAppliedBorderWindowId(on: controller) == previousBorderWindowId)
+        #expect(lastAppliedBorderWindowId(on: controller) == targetHandle.windowId)
+        #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == nil)
+        #expect(controller.niriEngine?.monitor(for: monitor.id)?.workspaceSwitch == nil)
+        #expect(recorder.relayoutEvents.isEmpty)
+        #expect(recorder.visibilityReasons.isEmpty)
+        #expect(recorder.fullRescanReasons.isEmpty)
+        #expect(recorder.windowRemovalReasons.isEmpty)
+        assertNoLegacyReasons(recorder)
+    }
+
     @Test @MainActor func crossMonitorWorkspaceSwitchSkipsAnimationWhenTargetIsAlreadyVisible() async {
         let fixture = makeTwoMonitorRefreshTestController()
         _ = await prepareNiriState(
@@ -1147,19 +1266,160 @@ private func prepareNiriState(
         controller.settings.workspaceConfigurations = [
             WorkspaceConfiguration(name: "2", layoutType: .dwindle)
         ]
+        controller.enableDwindleLayout()
+        await waitForRefreshWork(on: controller)
         controller.settings.focusFollowsWindowToMonitor = false
 
-        let recorder = RefreshEventRecorder()
-        installRefreshSpies(on: controller, recorder: recorder)
+        var relayoutEvents: [(RefreshReason, LayoutRefreshController.RefreshRoute)] = []
+        var fullRescanReasons: [RefreshReason] = []
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, route in
+            relayoutEvents.append((reason, route))
+            return false
+        }
+        controller.layoutRefreshController.debugHooks.onFullRescan = { reason in
+            fullRescanReasons.append(reason)
+            return false
+        }
 
         controller.workspaceNavigationHandler.moveFocusedWindow(toWorkspaceIndex: 1)
         await waitForRefreshWork(on: controller)
 
-        #expect(recorder.relayoutEvents.map(\.0) == [.workspaceTransition])
-        #expect(recorder.relayoutEvents.map(\.1) == [.immediateRelayout])
-        #expect(recorder.fullRescanReasons.isEmpty)
-        #expect(controller.workspaceManager.lastFocusedToken(in: targetWorkspaceId) == nil)
-        assertNoLegacyReasons(recorder)
+        #expect(relayoutEvents.map(\.0) == [.workspaceTransition])
+        #expect(relayoutEvents.map(\.1) == [.immediateRelayout])
+        #expect(fullRescanReasons.isEmpty)
+        #expect(controller.workspaceManager.lastFocusedToken(in: targetWorkspaceId) == WindowToken(pid: getpid(), windowId: 304))
+        #expect(
+            dwindleTokenSet(controller: controller, workspaceId: targetWorkspaceId)
+                == Set([WindowToken(pid: getpid(), windowId: 304)])
+        )
+        let observedReasons = relayoutEvents.map(\.0.rawValue) + fullRescanReasons.map(\.rawValue)
+        #expect(!observedReasons.contains("legacyImmediateCallsite"))
+        #expect(!observedReasons.contains("legacyCallsite"))
+    }
+
+    @Test @MainActor func moveFocusedWindowsToInactiveDwindleWorkspaceBootstrapsRecursiveLayout() async {
+        let controller = makeRefreshTestController()
+        guard let sourceWorkspaceId = controller.activeWorkspace()?.id,
+              let targetWorkspaceId = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true)
+        else {
+            Issue.record("Missing source or target workspace for Dwindle bootstrap test")
+            return
+        }
+
+        configureWorkspaceLayouts(
+            on: controller,
+            layoutsByName: [
+                "1": .defaultLayout,
+                "2": .dwindle
+            ]
+        )
+        controller.enableNiriLayout(maxWindowsPerColumn: 3)
+        controller.enableDwindleLayout()
+        await waitForRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+        controller.settings.focusFollowsWindowToMonitor = false
+
+        let windowIds = [3_401, 3_402, 3_403]
+        let handles: [WindowHandle] = windowIds.compactMap { windowId in
+            let token = controller.workspaceManager.addWindow(
+                makeRefreshTestWindow(windowId: windowId),
+                pid: getpid(),
+                windowId: windowId,
+                to: sourceWorkspaceId
+            )
+            guard let handle = controller.workspaceManager.handle(for: token) else {
+                Issue.record("Missing bridge handle for seeded Niri column window")
+                return nil
+            }
+            _ = controller.workspaceManager.rememberFocus(handle, in: sourceWorkspaceId)
+            return handle
+        }
+        guard handles.count == windowIds.count else { return }
+
+        guard let engine = controller.niriEngine,
+              let sourceMonitor = controller.workspaceManager.monitor(for: sourceWorkspaceId),
+              let targetMonitor = controller.workspaceManager.monitor(for: targetWorkspaceId)
+        else {
+            Issue.record("Missing Niri engine or workspace monitors for Dwindle bootstrap test")
+            return
+        }
+
+        let sourceRoot = NiriRoot(workspaceId: sourceWorkspaceId)
+        let sourceColumn = NiriContainer()
+        sourceColumn.width = .fixed(480)
+        sourceColumn.cachedWidth = 480
+        sourceRoot.appendChild(sourceColumn)
+        engine.roots[sourceWorkspaceId] = sourceRoot
+        engine.ensureMonitor(for: sourceMonitor.id, monitor: sourceMonitor).workspaceRoots[sourceWorkspaceId] = sourceRoot
+
+        var windowNodes: [NiriWindow] = []
+        for handle in handles {
+            let window = NiriWindow(token: handle.id)
+            sourceColumn.appendChild(window)
+            engine.tokenToNode[handle.id] = window
+            windowNodes.append(window)
+        }
+
+        guard let focusedHandle = handles.first,
+              let focusedWindow = windowNodes.first
+        else {
+            Issue.record("Missing focused source window for Dwindle bootstrap test")
+            return
+        }
+
+        _ = controller.workspaceManager.setManagedFocus(
+            focusedHandle,
+            in: sourceWorkspaceId,
+            onMonitor: sourceMonitor.id
+        )
+        _ = controller.workspaceManager.commitWorkspaceSelection(
+            nodeId: focusedWindow.id,
+            focusedToken: focusedHandle.id,
+            in: sourceWorkspaceId,
+            onMonitor: sourceMonitor.id
+        )
+        controller.workspaceManager.withNiriViewportState(for: sourceWorkspaceId) { state in
+            state.selectedNodeId = focusedWindow.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(0)
+        }
+
+        let movedTokens = handles.map(\.id)
+        let expectedFrames = warmReferenceDwindleFramesForRefreshTests(
+            tokens: movedTokens,
+            screen: controller.insetWorkingFrame(for: targetMonitor),
+            settings: controller.settings.resolvedDwindleSettings(for: targetMonitor)
+        )
+
+        var relayoutEvents: [(RefreshReason, LayoutRefreshController.RefreshRoute)] = []
+        var fullRescanReasons: [RefreshReason] = []
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, route in
+            relayoutEvents.append((reason, route))
+            return false
+        }
+        controller.layoutRefreshController.debugHooks.onFullRescan = { reason in
+            fullRescanReasons.append(reason)
+            return false
+        }
+
+        controller.workspaceNavigationHandler.moveColumnToWorkspace(rawWorkspaceID: "2")
+        await waitForRefreshWork(on: controller)
+
+        #expect(controller.activeWorkspace()?.id == sourceWorkspaceId)
+        #expect(relayoutEvents.map(\.0) == [.workspaceTransition])
+        #expect(relayoutEvents.map(\.1) == [.immediateRelayout])
+        #expect(fullRescanReasons.isEmpty)
+        #expect(dwindleTokenSet(controller: controller, workspaceId: targetWorkspaceId) == Set(movedTokens))
+        #expect(controller.dwindleEngine?.root(for: targetWorkspaceId)?.collectAllWindows() == movedTokens)
+
+        controller.workspaceNavigationHandler.switchWorkspace(index: 1)
+        await waitForSettledRefreshWork(on: controller)
+
+        let frames = controller.dwindleEngine?.currentFrames(in: targetWorkspaceId) ?? [:]
+        #expect(Set(frames.keys) == Set(movedTokens))
+        #expect(frames == expectedFrames)
     }
 
     @Test @MainActor func summonWindowRightIntoNiriUsesImmediateRelayoutOnly() async {
@@ -1383,6 +1643,59 @@ private func prepareNiriState(
         )
         await waitForRefreshWork(on: controller)
 
+        #expect(recorder.relayoutEvents.map(\.0) == [.appActivationTransition])
+        #expect(recorder.relayoutEvents.map(\.1) == [.immediateRelayout])
+        #expect(recorder.fullRescanReasons.isEmpty)
+        assertNoLegacyReasons(recorder)
+    }
+
+    @Test @MainActor func inactiveWorkspaceHandleAppActivationUsesImmediateRelayoutOnly() async {
+        let controller = makeRefreshTestController()
+        controller.hasStartedServices = true
+        guard let workspaceOne = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let workspaceTwo = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
+              let monitor = controller.workspaceManager.monitors.first
+        else {
+            Issue.record("Failed to create inactive-workspace app-activation fixture")
+            return
+        }
+
+        let sourceToken = controller.workspaceManager.addWindow(
+            makeRefreshTestWindow(windowId: 211),
+            pid: 2_211,
+            windowId: 211,
+            to: workspaceOne
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            sourceToken,
+            in: workspaceOne,
+            onMonitor: monitor.id
+        )
+
+        let targetPid: pid_t = 2_212
+        let targetToken = controller.workspaceManager.addWindow(
+            makeRefreshTestWindow(windowId: 212),
+            pid: targetPid,
+            windowId: 212,
+            to: workspaceTwo
+        )
+        controller.axEventHandler.isFullscreenProvider = { _ in false }
+        controller.axEventHandler.focusedWindowRefProvider = { pid in
+            guard pid == targetPid else { return nil }
+            return makeRefreshTestWindow(windowId: targetToken.windowId)
+        }
+
+        let recorder = RefreshEventRecorder()
+        installRefreshSpies(on: controller, recorder: recorder)
+
+        controller.axEventHandler.handleAppActivation(
+            pid: targetPid,
+            source: .workspaceDidActivateApplication
+        )
+        await waitForRefreshWork(on: controller)
+
+        #expect(controller.activeWorkspace()?.id == workspaceTwo)
+        #expect(controller.workspaceManager.focusedToken == targetToken)
         #expect(recorder.relayoutEvents.map(\.0) == [.appActivationTransition])
         #expect(recorder.relayoutEvents.map(\.1) == [.immediateRelayout])
         #expect(recorder.fullRescanReasons.isEmpty)
@@ -2643,13 +2956,18 @@ private func prepareNiriState(
         assertNoLegacyReasons(recorder)
     }
 
-    @Test @MainActor func fullRescanRemainsStickyUnderLowerPriorityRequests() async {
+    @Test @MainActor func fullRescanQueuesLowerPriorityRequestsAsFollowUps() async {
         let controller = makeRefreshTestController()
         let gate = AsyncGate()
         var fullRescanReasons: [RefreshReason] = []
+        var relayoutEvents: [(RefreshReason, LayoutRefreshController.RefreshRoute)] = []
         var postLayoutRuns = 0
 
         controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, route in
+            relayoutEvents.append((reason, route))
+            return true
+        }
         controller.layoutRefreshController.debugHooks.onFullRescan = { reason in
             fullRescanReasons.append(reason)
             await gate.wait()
@@ -2668,9 +2986,11 @@ private func prepareNiriState(
         await waitForRefreshWork(on: controller)
 
         #expect(controller.layoutRefreshController.debugCounters.fullRescanExecutions == 1)
-        #expect(controller.layoutRefreshController.debugCounters.relayoutExecutions == 0)
-        #expect(controller.layoutRefreshController.debugCounters.immediateRelayoutExecutions == 0)
+        #expect(controller.layoutRefreshController.debugCounters.relayoutExecutions == 1)
+        #expect(controller.layoutRefreshController.debugCounters.immediateRelayoutExecutions == 1)
         #expect(fullRescanReasons == [.startup])
+        #expect(relayoutEvents.map(\.0) == [.workspaceTransition, .gapsChanged])
+        #expect(relayoutEvents.map(\.1) == [.immediateRelayout, .relayout])
         #expect(postLayoutRuns == 1)
     }
 
@@ -2723,6 +3043,207 @@ private func prepareNiriState(
         await waitForRefreshWork(on: controller)
 
         #expect(controller.workspaceManager.entry(forPid: pid, windowId: windowId) == nil)
+    }
+
+    @Test @MainActor func fullRescanPreservesTrackedWindowsForFailedEnumerationPIDs() async {
+        let controller = makeRefreshTestController()
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let liveHandle = addWindow(on: controller, workspaceId: workspaceId, pid: 6_101, windowId: 6_101)
+        let failedHandle = addWindow(on: controller, workspaceId: workspaceId, pid: 6_102, windowId: 6_102)
+        let missingHandle = addWindow(on: controller, workspaceId: workspaceId, pid: 6_103, windowId: 6_103)
+
+        controller.axManager.fullRescanEnumerationOverrideForTests = {
+            AXManager.FullRescanEnumerationSnapshot(
+                windows: [(makeRefreshTestWindow(windowId: 6_101), 6_101, 6_101)],
+                failedPIDs: [6_102]
+            )
+        }
+
+        controller.layoutRefreshController.requestFullRescan(reason: .startup)
+        await waitForRefreshWork(on: controller)
+
+        #expect(controller.workspaceManager.entry(for: liveHandle) != nil)
+        #expect(controller.workspaceManager.entry(for: failedHandle) != nil)
+        #expect(controller.workspaceManager.entry(for: missingHandle) == nil)
+    }
+
+    @Test @MainActor func activeFullRescanQueuesFollowUpRelayoutForLateNiriCreate() async {
+        let fixture = makeTwoMonitorRefreshTestController()
+        let controller = fixture.controller
+        defer { cleanupRefreshTestController(controller) }
+        let fullRescanGate = AsyncGate()
+        var fullRescanReasons: [RefreshReason] = []
+        var relayoutEvents: [(RefreshReason, LayoutRefreshController.RefreshRoute)] = []
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        let primaryHandle = addWindow(on: controller, workspaceId: fixture.primaryWorkspaceId, pid: getpid(), windowId: 6_501)
+        let secondaryHandle = addWindow(on: controller, workspaceId: fixture.secondaryWorkspaceId, pid: getpid(), windowId: 6_502)
+        controller.axManager.currentWindowsAsyncOverride = {
+            [
+                (makeRefreshTestWindow(windowId: 6_501), getpid(), 6_501),
+                (makeRefreshTestWindow(windowId: 6_502), getpid(), 6_502)
+            ]
+        }
+        await waitForRefreshWork(on: controller)
+
+        controller.niriEngine?.roots.removeValue(forKey: fixture.primaryWorkspaceId)
+        controller.niriEngine?.roots.removeValue(forKey: fixture.secondaryWorkspaceId)
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, route in
+            relayoutEvents.append((reason, route))
+            return false
+        }
+        controller.layoutRefreshController.debugHooks.onFullRescan = { reason in
+            fullRescanReasons.append(reason)
+            await fullRescanGate.wait()
+            return false
+        }
+
+        controller.layoutRefreshController.requestFullRescan(reason: .startup)
+        await waitUntil { fullRescanReasons == [.startup] }
+        fullRescanGate.open()
+        await waitUntil {
+            let primaryTokenCount = niriTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).count
+            let secondaryTokenCount = niriTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).count
+            let populatedCount = [
+                primaryTokenCount,
+                secondaryTokenCount
+            ]
+            .filter { $0 > 0 }
+            .count
+            return populatedCount == 1
+        }
+
+        let builtWorkspaceId: WorkspaceDescriptor.ID
+        if !niriTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).isEmpty,
+           niriTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).isEmpty
+        {
+            builtWorkspaceId = fixture.primaryWorkspaceId
+        } else if !niriTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).isEmpty,
+                  niriTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).isEmpty
+        {
+            builtWorkspaceId = fixture.secondaryWorkspaceId
+        } else {
+            Issue.record("Expected exactly one Niri workspace to be built before follow-up relayout injection")
+            return
+        }
+
+        let newWindowId = builtWorkspaceId == fixture.primaryWorkspaceId ? 6_503 : 6_504
+        let newToken = controller.workspaceManager.addWindow(
+            makeRefreshTestWindow(windowId: newWindowId),
+            pid: getpid(),
+            windowId: newWindowId,
+            to: builtWorkspaceId
+        )
+        controller.layoutRefreshController.requestRelayout(
+            reason: .axWindowCreated,
+            affectedWorkspaceIds: [builtWorkspaceId]
+        )
+        await waitForRefreshWork(on: controller)
+
+        #expect(fullRescanReasons == [.startup])
+        #expect(relayoutEvents.map(\.0) == [.axWindowCreated])
+        #expect(relayoutEvents.map(\.1) == [.relayout])
+        #expect(controller.workspaceManager.entry(for: newToken) != nil)
+        #expect(niriTokenSet(controller: controller, workspaceId: builtWorkspaceId).contains(newToken))
+        #expect(niriTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId) == workspaceManagerTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId))
+        #expect(niriTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId) == workspaceManagerTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId))
+        #expect(niriTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).contains(primaryHandle.id))
+        #expect(niriTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).contains(secondaryHandle.id))
+    }
+
+    @Test @MainActor func activeFullRescanQueuesFollowUpWindowRemovalForLateDwindleDestroy() async {
+        let fixture = makeTwoMonitorRefreshTestController()
+        let controller = fixture.controller
+        defer { cleanupRefreshTestController(controller) }
+        let fullRescanGate = AsyncGate()
+        var fullRescanReasons: [RefreshReason] = []
+        var windowRemovalReasons: [RefreshReason] = []
+
+        configureWorkspaceLayouts(on: controller, layoutsByName: ["1": .dwindle, "2": .dwindle])
+        controller.enableDwindleLayout()
+
+        let primaryFirst = addWindow(on: controller, workspaceId: fixture.primaryWorkspaceId, pid: getpid(), windowId: 6_601)
+        let primarySecond = addWindow(on: controller, workspaceId: fixture.primaryWorkspaceId, pid: getpid(), windowId: 6_602)
+        let secondaryFirst = addWindow(on: controller, workspaceId: fixture.secondaryWorkspaceId, pid: getpid(), windowId: 6_611)
+        let secondarySecond = addWindow(on: controller, workspaceId: fixture.secondaryWorkspaceId, pid: getpid(), windowId: 6_612)
+        controller.axManager.currentWindowsAsyncOverride = {
+            [
+                (makeRefreshTestWindow(windowId: 6_601), getpid(), 6_601),
+                (makeRefreshTestWindow(windowId: 6_602), getpid(), 6_602),
+                (makeRefreshTestWindow(windowId: 6_611), getpid(), 6_611),
+                (makeRefreshTestWindow(windowId: 6_612), getpid(), 6_612)
+            ]
+        }
+        await waitForRefreshWork(on: controller)
+
+        controller.dwindleEngine?.removeLayout(for: fixture.primaryWorkspaceId)
+        controller.dwindleEngine?.removeLayout(for: fixture.secondaryWorkspaceId)
+        controller.layoutRefreshController.debugHooks.onWindowRemoval = { reason, _ in
+            windowRemovalReasons.append(reason)
+            return false
+        }
+        controller.layoutRefreshController.debugHooks.onFullRescan = { reason in
+            fullRescanReasons.append(reason)
+            await fullRescanGate.wait()
+            return false
+        }
+
+        controller.layoutRefreshController.requestFullRescan(reason: .startup)
+        await waitUntil { fullRescanReasons == [.startup] }
+        fullRescanGate.open()
+        await waitUntil {
+            let primaryTokenCount = dwindleTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).count
+            let secondaryTokenCount = dwindleTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).count
+            let populatedCount = [
+                primaryTokenCount,
+                secondaryTokenCount
+            ]
+            .filter { $0 > 0 }
+            .count
+            return populatedCount == 1
+        }
+
+        let builtWorkspaceId: WorkspaceDescriptor.ID
+        let removedToken: WindowToken
+        let survivingToken: WindowToken
+        if !dwindleTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).isEmpty,
+           dwindleTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).isEmpty
+        {
+            builtWorkspaceId = fixture.primaryWorkspaceId
+            removedToken = primarySecond.id
+            survivingToken = primaryFirst.id
+        } else if !dwindleTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId).isEmpty,
+                  dwindleTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId).isEmpty
+        {
+            builtWorkspaceId = fixture.secondaryWorkspaceId
+            removedToken = secondarySecond.id
+            survivingToken = secondaryFirst.id
+        } else {
+            Issue.record("Expected exactly one Dwindle workspace to be built before follow-up removal injection")
+            return
+        }
+
+        _ = controller.workspaceManager.removeWindow(pid: removedToken.pid, windowId: removedToken.windowId)
+        controller.layoutRefreshController.requestWindowRemoval(
+            workspaceId: builtWorkspaceId,
+            layoutType: .dwindle,
+            removedNodeId: nil,
+            niriOldFrames: [:],
+            shouldRecoverFocus: false
+        )
+        await waitForRefreshWork(on: controller)
+
+        #expect(fullRescanReasons == [.startup])
+        #expect(windowRemovalReasons == [.windowDestroyed])
+        #expect(controller.workspaceManager.entry(for: removedToken) == nil)
+        #expect(!dwindleTokenSet(controller: controller, workspaceId: builtWorkspaceId).contains(removedToken))
+        #expect(dwindleTokenSet(controller: controller, workspaceId: builtWorkspaceId).contains(survivingToken))
+        #expect(dwindleTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId) == workspaceManagerTokenSet(controller: controller, workspaceId: fixture.primaryWorkspaceId))
+        #expect(dwindleTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId) == workspaceManagerTokenSet(controller: controller, workspaceId: fixture.secondaryWorkspaceId))
     }
 
     @Test @MainActor func sameWorkspaceWindowRemovalPreservesMultiplePayloads() async {

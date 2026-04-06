@@ -8,6 +8,17 @@ final class MouseEventHandler {
         case dwindle(workspaceId: WorkspaceDescriptor.ID, token: WindowToken)
     }
 
+    struct GestureTouchSample: Equatable, Sendable {
+        let phase: NSTouch.Phase
+        let normalizedPosition: CGPoint?
+    }
+
+    struct GestureEventSnapshot: Sendable {
+        let location: CGPoint
+        let phaseRawValue: NSEvent.Phase.RawValue
+        let touches: [GestureTouchSample]
+    }
+
     struct State {
         struct LockedGestureContext {
             let workspaceId: WorkspaceDescriptor.ID
@@ -102,7 +113,7 @@ final class MouseEventHandler {
         var debugCounters = DebugCounters()
     }
 
-    nonisolated(unsafe) static weak var _instance: MouseEventHandler?
+    nonisolated(unsafe) static weak var sharedInstance: MouseEventHandler?
 
     weak var controller: WMController?
     var state = State()
@@ -113,7 +124,7 @@ final class MouseEventHandler {
     }
 
     func setup() {
-        MouseEventHandler._instance = self
+        MouseEventHandler.sharedInstance = self
 
         let eventMask: CGEventMask =
             (1 << CGEventType.mouseMoved.rawValue) |
@@ -124,40 +135,13 @@ final class MouseEventHandler {
 
         let callback: CGEventTapCallBack = { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let tap = MouseEventHandler._instance?.state.eventTap {
+                if let tap = MouseEventHandler.sharedInstance?.state.eventTap {
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
                 return Unmanaged.passUnretained(event)
             }
 
-            let location = event.location
-            let screenLocation = ScreenCoordinateSpace.toAppKit(point: location)
-            precondition(Thread.isMainThread, "Mouse event taps are expected on the main run loop")
-
-            MainActor.assumeIsolated {
-                guard let handler = MouseEventHandler._instance else { return }
-                switch type {
-                case .mouseMoved:
-                    handler.receiveTapMouseMoved(at: screenLocation)
-                case .leftMouseDown:
-                    handler.receiveTapMouseDown(at: screenLocation, modifiers: event.flags)
-                case .leftMouseDragged:
-                    handler.receiveTapMouseDragged(at: screenLocation)
-                case .leftMouseUp:
-                    handler.receiveTapMouseUp(at: screenLocation)
-                case .scrollWheel:
-                    handler.receiveTapScrollWheel(
-                        at: screenLocation,
-                        deltaX: CGFloat(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)),
-                        deltaY: CGFloat(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)),
-                        momentumPhase: UInt32(event.getIntegerValueField(.scrollWheelEventMomentumPhase)),
-                        phase: UInt32(event.getIntegerValueField(.scrollWheelEventScrollPhase)),
-                        modifiers: event.flags
-                    )
-                default:
-                    break
-                }
-            }
+            _ = MouseEventHandler.processTapCallback(type: type, event: event)
 
             return Unmanaged.passUnretained(event)
         }
@@ -183,18 +167,13 @@ final class MouseEventHandler {
 
         let gestureCallback: CGEventTapCallBack = { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let tap = MouseEventHandler._instance?.state.gestureTap {
+                if let tap = MouseEventHandler.sharedInstance?.state.gestureTap {
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
                 return Unmanaged.passUnretained(event)
             }
 
-            if type.rawValue == NSEvent.EventType.gesture.rawValue {
-                precondition(Thread.isMainThread, "Gesture taps are expected on the main run loop")
-                MainActor.assumeIsolated {
-                    MouseEventHandler._instance?.receiveTapGestureEvent(from: event)
-                }
-            }
+            _ = MouseEventHandler.processGestureTapCallback(type: type, event: event)
 
             return Unmanaged.passUnretained(event)
         }
@@ -234,7 +213,7 @@ final class MouseEventHandler {
             CGEvent.tapEnable(tap: tap, enable: false)
             state.gestureTap = nil
         }
-        MouseEventHandler._instance = nil
+        MouseEventHandler.sharedInstance = nil
         state.currentHoveredEdges = []
         state.isResizing = false
         state.pendingTapEvents.clear()
@@ -297,12 +276,24 @@ final class MouseEventHandler {
 
     func dispatchGestureEvent(from cgEvent: CGEvent) {
         guard !isInputSuppressed else { return }
-        handleGestureEventFromTap(cgEvent)
+        guard let snapshot = Self.makeGestureEventSnapshot(from: cgEvent) else { return }
+        handleGestureEvent(snapshot)
     }
 
     func dispatchGestureEvent(_ event: NSEvent, at location: CGPoint) {
         guard !isInputSuppressed else { return }
-        handleGestureEvent(event, at: location)
+        handleGestureEvent(
+            GestureEventSnapshot(
+                location: location,
+                phaseRawValue: event.phase.rawValue,
+                touches: event.allTouches().map { touch in
+                    GestureTouchSample(
+                        phase: touch.phase,
+                        normalizedPosition: Self.sanitizedGestureTouchPosition(touch.normalizedPosition)
+                    )
+                }
+            )
+        )
     }
 
     var isInteractiveGestureActive: Bool {
@@ -320,6 +311,22 @@ final class MouseEventHandler {
     func resetDebugStateForTests() {
         state.debugCounters = .init()
         state.pendingTapEvents.clear()
+    }
+
+    func handleTapCallbackForTests(
+        type: CGEventType,
+        event: CGEvent,
+        isMainThread: Bool
+    ) -> Bool {
+        Self.processTapCallback(type: type, event: event, isMainThread: isMainThread)
+    }
+
+    func handleGestureTapCallbackForTests(
+        type: CGEventType,
+        event: CGEvent,
+        isMainThread: Bool
+    ) -> Bool {
+        Self.processGestureTapCallback(type: type, event: event, isMainThread: isMainThread)
     }
 
     func receiveTapMouseMoved(at location: CGPoint) {
@@ -375,7 +382,17 @@ final class MouseEventHandler {
         } else {
             flushPendingTapEvents(beforeImmediateDispatch: true)
         }
-        dispatchGestureEvent(from: cgEvent)
+        guard let snapshot = Self.makeGestureEventSnapshot(from: cgEvent) else { return }
+        handleGestureEvent(snapshot)
+    }
+
+    func receiveTapGestureEvent(_ snapshot: GestureEventSnapshot) {
+        if let controller, controller.isPointInOwnWindow(snapshot.location) {
+            dropPendingTapEvents()
+        } else {
+            flushPendingTapEvents(beforeImmediateDispatch: true)
+        }
+        handleGestureEvent(snapshot)
     }
 
     private var isInputSuppressed: Bool {
@@ -610,6 +627,7 @@ final class MouseEventHandler {
                         startLocation: location,
                         isInsertMode: isInsertMode,
                         in: wsId,
+                        motion: controller.motionPolicy.snapshot(),
                         state: &vstate,
                         workingFrame: workingFrame,
                         gaps: gaps
@@ -750,6 +768,7 @@ final class MouseEventHandler {
                     didEnd = engine.interactiveMoveEnd(
                         at: location,
                         in: wsId,
+                        motion: controller.motionPolicy.snapshot(),
                         state: &vstate,
                         workingFrame: workingFrame,
                         gaps: gaps
@@ -779,6 +798,7 @@ final class MouseEventHandler {
 
             controller.workspaceManager.withNiriViewportState(for: wsId) { vstate in
                 engine.interactiveResizeEnd(
+                    motion: controller.motionPolicy.snapshot(),
                     state: &vstate,
                     workingFrame: workingFrame,
                     gaps: gaps
@@ -849,6 +869,9 @@ final class MouseEventHandler {
 
     private func handleFocusFollowsMouse(at location: CGPoint) {
         guard let controller else { return }
+        guard controller.focusPolicyEngine.evaluate(.focusFollowsMouse).allowsFocusChange else {
+            return
+        }
         guard !controller.workspaceManager.isNonManagedFocusActive,
               !controller.workspaceManager.hasPendingNativeFullscreenTransition,
               !controller.workspaceManager.isAppFullscreenActive else {
@@ -919,14 +942,9 @@ final class MouseEventHandler {
         }
     }
 
-    private func handleGestureEventFromTap(_ cgEvent: CGEvent) {
-        let screenLocation = ScreenCoordinateSpace.toAppKit(point: cgEvent.location)
-        guard let nsEvent = NSEvent(cgEvent: cgEvent) else { return }
-        handleGestureEvent(nsEvent, at: screenLocation)
-    }
-
-    private func handleGestureEvent(_ event: NSEvent, at location: CGPoint) {
+    private func handleGestureEvent(_ snapshot: GestureEventSnapshot) {
         guard let controller else { return }
+        let location = snapshot.location
         guard controller.isEnabled, controller.settings.scrollGestureEnabled else { return }
         if controller.isOverviewOpen() { return }
         if controller.isPointInOwnWindow(location) {
@@ -939,7 +957,7 @@ final class MouseEventHandler {
         let requiredFingers = controller.settings.gestureFingerCount.rawValue
         let invertDirection = controller.settings.gestureInvertDirection
 
-        let phase = event.phase
+        let phase = NSEvent.Phase(rawValue: snapshot.phaseRawValue)
         if phase == .ended || phase == .cancelled {
             if state.gesturePhase == .committed {
                 guard let lockedContext = state.lockedGestureContext else {
@@ -961,43 +979,20 @@ final class MouseEventHandler {
             resetGestureState()
             return
         }
-        let touches = event.allTouches()
-        guard !touches.isEmpty else {
+        guard !snapshot.touches.isEmpty else {
+            resetGestureState()
+            return
+        }
+        guard let averageTouchPosition = Self.averageGestureTouchPosition(
+            requiredFingers: requiredFingers,
+            touches: snapshot.touches
+        ) else {
             resetGestureState()
             return
         }
 
-        var sumX: CGFloat = 0.0
-        var sumY: CGFloat = 0.0
-        var touchCount = 0
-        var activeCount = 0
-        var tooManyTouches = false
-
-        for touch in touches {
-            let touchPhase = touch.phase
-            if touchPhase == .ended || touchPhase == .cancelled {
-                continue
-            }
-
-            touchCount += 1
-            if touchCount > requiredFingers {
-                tooManyTouches = true
-                break
-            }
-
-            let pos = touch.normalizedPosition
-            sumX += pos.x
-            sumY += pos.y
-            activeCount += 1
-        }
-
-        if tooManyTouches || touchCount != requiredFingers || activeCount == 0 {
-            resetGestureState()
-            return
-        }
-
-        let avgX = sumX / CGFloat(activeCount)
-        let avgY = sumY / CGFloat(activeCount)
+        let avgX = averageTouchPosition.x
+        let avgY = averageTouchPosition.y
 
         switch state.gesturePhase {
         case .idle:
@@ -1138,6 +1133,7 @@ final class MouseEventHandler {
                 columns: columns,
                 gap: gap,
                 viewportWidth: insetFrame.width,
+                motion: controller.motionPolicy.snapshot(),
                 centerMode: engine.centerFocusedColumn,
                 alwaysCenterSingleColumn: engine.alwaysCenterSingleColumn
             )
@@ -1186,5 +1182,121 @@ final class MouseEventHandler {
         state.gestureStartY = 0.0
         state.gestureLastDeltaX = 0.0
         state.lockedGestureContext = nil
+    }
+
+    nonisolated private static func processTapCallback(
+        type: CGEventType,
+        event: CGEvent,
+        isMainThread: Bool = Thread.isMainThread
+    ) -> Bool {
+        guard isMainThread else { return false }
+
+        let location = event.location
+        let screenLocation = ScreenCoordinateSpace.toAppKit(point: location)
+        let modifiers = event.flags
+        let deltaX = CGFloat(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2))
+        let deltaY = CGFloat(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1))
+        let momentumPhase = UInt32(event.getIntegerValueField(.scrollWheelEventMomentumPhase))
+        let phase = UInt32(event.getIntegerValueField(.scrollWheelEventScrollPhase))
+
+        MainActor.assumeIsolated {
+            guard let handler = MouseEventHandler.sharedInstance else { return }
+            switch type {
+            case .mouseMoved:
+                handler.receiveTapMouseMoved(at: screenLocation)
+            case .leftMouseDown:
+                handler.receiveTapMouseDown(at: screenLocation, modifiers: modifiers)
+            case .leftMouseDragged:
+                handler.receiveTapMouseDragged(at: screenLocation)
+            case .leftMouseUp:
+                handler.receiveTapMouseUp(at: screenLocation)
+            case .scrollWheel:
+                handler.receiveTapScrollWheel(
+                    at: screenLocation,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    momentumPhase: momentumPhase,
+                    phase: phase,
+                    modifiers: modifiers
+                )
+            default:
+                break
+            }
+        }
+
+        return true
+    }
+
+    nonisolated private static func processGestureTapCallback(
+        type: CGEventType,
+        event: CGEvent,
+        isMainThread: Bool = Thread.isMainThread
+    ) -> Bool {
+        guard type.rawValue == NSEvent.EventType.gesture.rawValue else { return false }
+        guard isMainThread else { return false }
+        guard let snapshot = makeGestureEventSnapshot(from: event) else { return true }
+
+        MainActor.assumeIsolated {
+            MouseEventHandler.sharedInstance?.receiveTapGestureEvent(snapshot)
+        }
+
+        return true
+    }
+
+    static func averageGestureTouchPosition(
+        requiredFingers: Int,
+        touches: [GestureTouchSample]
+    ) -> CGPoint? {
+        guard requiredFingers > 0 else { return nil }
+
+        var sumX: CGFloat = 0
+        var sumY: CGFloat = 0
+        var touchCount = 0
+        var activeCount = 0
+
+        for touch in touches {
+            if touch.phase == .ended || touch.phase == .cancelled {
+                continue
+            }
+
+            touchCount += 1
+            if touchCount > requiredFingers {
+                return nil
+            }
+
+            guard let normalizedPosition = touch.normalizedPosition else {
+                return nil
+            }
+
+            sumX += normalizedPosition.x
+            sumY += normalizedPosition.y
+            activeCount += 1
+        }
+
+        guard touchCount == requiredFingers, activeCount > 0 else { return nil }
+
+        return CGPoint(
+            x: sumX / CGFloat(activeCount),
+            y: sumY / CGFloat(activeCount)
+        )
+    }
+
+    nonisolated private static func sanitizedGestureTouchPosition(_ position: CGPoint) -> CGPoint? {
+        guard position.x.isFinite, position.y.isFinite else { return nil }
+        return position
+    }
+
+    nonisolated private static func makeGestureEventSnapshot(from cgEvent: CGEvent) -> GestureEventSnapshot? {
+        guard let nsEvent = NSEvent(cgEvent: cgEvent) else { return nil }
+        return GestureEventSnapshot(
+            location: ScreenCoordinateSpace.toAppKit(point: cgEvent.location),
+            phaseRawValue: nsEvent.phase.rawValue,
+            touches: nsEvent.allTouches().map { touch in
+                GestureTouchSample(
+                    phase: touch.phase,
+                    normalizedPosition: sanitizedGestureTouchPosition(touch.normalizedPosition)
+                )
+            }
+        )
     }
 }
