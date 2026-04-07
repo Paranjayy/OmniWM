@@ -22,3 +22,14 @@ Here is a spectrum of wild, productivity-enhancing ideas for building the ultima
 ## 🎨 Aesthetic Overdrives
 - **Ghost Mode Layers**: A hotkey that dims all windows that are *not* currently focused to 40% opacity and blurs them, giving you complete tunnel-vision focus on the active app.
 - **Dynamic Gaps**: Padding between windows expands slightly when you aren't actively typing, providing a "relaxed" aesthetic, and tightens to 0px gaps when you are typing fast (focus mode).
+
+## 🖱️ BetterTouchTool Synergy & Inputs
+- **Trackpad Sigils**: Seamlessly integrate BetterTouchTool to trigger OmniWM commands via trackpad gestures. Swiping four fingers down collapses all windows; drawing an "O" shape opens the workspace visual dashboard.
+- **Mouse Chords / Advanced Clicks**: Holding Right-Click + Left-Clicking cycles between OmniWM floating windows without needing to reach for the keyboard.
+
+## ⏳ Temporal Layouts & Timelines
+- **Layout Time Machine**: OmniWM silently caches your window positions every 5 minutes. If a layout gets completely messed up by an unplugged monitor or accidental drag, hit `RCmd + Shift + Backspace` to rewind your entire workspace visual state back 5 minutes.
+
+## 🎵 Ambient & Haptic Feedback 
+- **Auditory Clutter Indicators**: Subtle, low-tempo ambient hums that dynamically shift pitch based on how many windows you have open or unorganized. The cleaner your layout, the quieter the system.
+- **Haptic Confirmations**: Utilizing MacBook force-touch feedback on your trackpad to give a physical "thud" confirmation when a window snaps perfectly into a 1/3 column.
