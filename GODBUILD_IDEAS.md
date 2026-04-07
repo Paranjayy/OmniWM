@@ -211,3 +211,27 @@ better touch tool config - '/Users/paranjay/Library/Application Support/BetterTo
 
 ### 30. Smart Profile Switching
 - Use BTT to detect when you open a "Hobby" app (e.g. Spotify, Discord) and automatically tell OmniWM to switch to the **"Relax"** profile (bigger gaps, softer colors).
+
+---
+
+## 🔱 Tier 12 — The Bridge (Karabiner & BetterTouchTool)
+> *The unified input and haptic layer.*
+
+### 31. Universal Hyper (Karabiner)
+- Map `Caps Lock` to `Cmd + Opt + Ctrl + Shift` (Hyper Key).
+- Use this to easily trigger the new 4-key "Hyper-LOpt" shortcuts in OmniWM.
+- `Hyper + 1-9` → Workspace Switching.
+- `Hyper + Arrows` → Window Navigation (Niri-style).
+
+### 32. Vim Mode Universal (Karabiner)
+- `Hyper + H/J/K/L` mapped directly to OmniWM's focus commands for frictionless movement.
+
+### 33. Gesture Control & Haptics (BTT)
+- **3-Finger Swipe**: Map 3-finger horizontal swipes to `Hyper + Left/Right` for workspace switching.
+- **Trigger Trackpad Haptics**: Kick the trackpad on every OmniWM workspace transition or window resize.
+
+### 34. Notch Integration (BTT)
+- Show the current OmniWM workspace index at the notch center (using BTT's Notch functionality).
+
+### 35. Window Snapping Fallback
+- Use BTT center-docking as a fallback for the "God-Float" script if native WM state is inconsistent.

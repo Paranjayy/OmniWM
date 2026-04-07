@@ -109,7 +109,9 @@ enum ActionCatalog {
     private static func buildSpecs() -> [ActionSpec] {
         var specs: [ActionSpec] = []
 
-        let hyperLayer = UInt32(cmdKey | controlKey | optionKey | shiftKey)
+        let rcmdLayer = UInt32(cmdKey | controlKey | shiftKey)      // Shift + Ctrl + Cmd
+        let roptLayer = UInt32(cmdKey | controlKey | optionKey)     // Ctrl + Opt + Cmd (Meh)
+        let hyperLayer = UInt32(cmdKey | controlKey | optionKey | shiftKey) // 4-keys (Hyper)
 
         for (idx, code) in digitCodes.enumerated() {
             specs.append(
@@ -117,7 +119,7 @@ enum ActionCatalog {
                     id: "switchWorkspace.\(idx)",
                     command: .switchWorkspace(idx),
                     category: .workspace,
-                    binding: KeyBinding(keyCode: code, modifiers: hyperLayer)
+                    binding: KeyBinding(keyCode: code, modifiers: rcmdLayer)
                 )
             )
             specs.append(
@@ -135,7 +137,7 @@ enum ActionCatalog {
                 id: "workspaceBackAndForth",
                 command: .workspaceBackAndForth,
                 category: .workspace,
-                binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: hyperLayer),
+                binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: roptLayer),
                 keywords: ["back and forth", "previous workspace"]
             )
         )
@@ -146,10 +148,10 @@ enum ActionCatalog {
         ])
 
         specs.append(contentsOf: [
-            action(id: "focus.left", command: .focus(.left), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: hyperLayer)),
-            action(id: "focus.down", command: .focus(.down), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: hyperLayer)),
-            action(id: "focus.up", command: .focus(.up), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: hyperLayer)),
-            action(id: "focus.right", command: .focus(.right), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: hyperLayer)),
+            action(id: "focus.left", command: .focus(.left), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: roptLayer)),
+            action(id: "focus.down", command: .focus(.down), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: roptLayer)),
+            action(id: "focus.up", command: .focus(.up), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: roptLayer)),
+            action(id: "focus.right", command: .focus(.right), category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_D), modifiers: roptLayer)),
         ])
 
         specs.append(
@@ -168,8 +170,8 @@ enum ActionCatalog {
         ])
 
         specs.append(contentsOf: [
-            action(id: "moveWindowToWorkspaceUp", command: .moveWindowToWorkspaceUp, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: hyperLayer)),
-            action(id: "moveWindowToWorkspaceDown", command: .moveWindowToWorkspaceDown, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: hyperLayer)),
+            action(id: "moveWindowToWorkspaceUp", command: .moveWindowToWorkspaceUp, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: hyperLayer)),
+            action(id: "moveWindowToWorkspaceDown", command: .moveWindowToWorkspaceDown, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: hyperLayer)),
             action(id: "moveColumnToWorkspaceUp", command: .moveColumnToWorkspaceUp, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_PageUp), modifiers: hyperLayer)),
             action(id: "moveColumnToWorkspaceDown", command: .moveColumnToWorkspaceDown, category: .workspace, binding: KeyBinding(keyCode: UInt32(kVK_PageDown), modifiers: hyperLayer)),
         ])
@@ -186,10 +188,10 @@ enum ActionCatalog {
         }
 
         specs.append(contentsOf: [
-            action(id: "move.left", command: .move(.left), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: hyperLayer)),
-            action(id: "move.down", command: .move(.down), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_DownArrow), modifiers: hyperLayer)),
-            action(id: "move.up", command: .move(.up), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_UpArrow), modifiers: hyperLayer)),
-            action(id: "move.right", command: .move(.right), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: hyperLayer)),
+            action(id: "move.left", command: .move(.left), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: hyperLayer)),
+            action(id: "move.down", command: .move(.down), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: hyperLayer)),
+            action(id: "move.up", command: .move(.up), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: hyperLayer)),
+            action(id: "move.right", command: .move(.right), category: .move, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_D), modifiers: hyperLayer)),
         ])
 
         specs.append(contentsOf: [
@@ -201,11 +203,11 @@ enum ActionCatalog {
         specs.append(contentsOf: [
             action(id: "toggleFullscreen", command: .toggleFullscreen, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_Return), modifiers: hyperLayer)),
             action(id: "toggleNativeFullscreen", command: .toggleNativeFullscreen, category: .layout, binding: .unassigned),
-            action(id: "moveColumn.left", command: .moveColumn(.left), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: hyperLayer)),
-            action(id: "moveColumn.right", command: .moveColumn(.right), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: hyperLayer)),
-            action(id: "toggleColumnTabbed", command: .toggleColumnTabbed, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: hyperLayer)),
-            action(id: "focusColumnFirst", command: .focusColumnFirst, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_Home), modifiers: hyperLayer)),
-            action(id: "focusColumnLast", command: .focusColumnLast, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_End), modifiers: hyperLayer)),
+            action(id: "moveColumn.left", command: .moveColumn(.left), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: rcmdLayer)),
+            action(id: "moveColumn.right", command: .moveColumn(.right), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_D), modifiers: rcmdLayer)),
+            action(id: "toggleColumnTabbed", command: .toggleColumnTabbed, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: rcmdLayer)),
+            action(id: "focusColumnFirst", command: .focusColumnFirst, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_Home), modifiers: rcmdLayer)),
+            action(id: "focusColumnLast", command: .focusColumnLast, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_End), modifiers: rcmdLayer)),
         ])
 
         for (idx, code) in digitCodes.enumerated() {
@@ -246,10 +248,10 @@ enum ActionCatalog {
         ])
 
         specs.append(contentsOf: [
-            action(id: "openCommandPalette", command: .openCommandPalette, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_Space), modifiers: hyperLayer), keywords: ["palette", "search", "commands", "menu"]),
-            action(id: "raiseAllFloatingWindows", command: .raiseAllFloatingWindows, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_R), modifiers: hyperLayer), keywords: ["float", "floating", "raise"]),
+            action(id: "openCommandPalette", command: .openCommandPalette, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_Space), modifiers: rcmdLayer), keywords: ["launcher", "spotlight"]),
+            action(id: "raiseAllFloatingWindows", command: .raiseAllFloatingWindows, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_R), modifiers: rcmdLayer), keywords: ["float", "floating", "raise"]),
             action(id: "rescueOffscreenWindows", command: .rescueOffscreenWindows, category: .layout, binding: .unassigned, keywords: ["rescue", "offscreen", "off-screen"]),
-            action(id: "toggleFocusedWindowFloating", command: .toggleFocusedWindowFloating, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | controlKey | shiftKey)), keywords: ["float", "floating"]),
+            action(id: "toggleFocusedWindowFloating", command: .toggleFocusedWindowFloating, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_G), modifiers: rcmdLayer), keywords: ["float", "floating"]),
             action(id: "assignFocusedWindowToScratchpad", command: .assignFocusedWindowToScratchpad, category: .layout, binding: .unassigned, keywords: ["scratchpad"]),
             action(id: "toggleScratchpadWindow", command: .toggleScratchpadWindow, category: .layout, binding: .unassigned, keywords: ["scratchpad"]),
             action(id: "openMenuAnywhere", command: .openMenuAnywhere, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_M), modifiers: hyperLayer), keywords: ["menu", "anywhere"]),

@@ -193,9 +193,16 @@ final class CommandHandler {
             let targetHeight: CGFloat = 947
 
             if let monitor = controller.monitorForInteraction() {
+                let displayBounds = CGDisplayBounds(monitor.displayId)
                 let screenVisibleFrame = monitor.visibleFrame
-                let centerX = screenVisibleFrame.origin.x + (screenVisibleFrame.width - targetWidth) / 2
-                let centerY = screenVisibleFrame.origin.y + (screenVisibleFrame.height - targetHeight) / 2
+                
+                // Horizontal center
+                let centerX = displayBounds.minX + (displayBounds.width - targetWidth) / 2
+                
+                // Vertical End-Center (bottom of visible screen with 8px pad)
+                // Cocoa visibleFrame gives the bottom inset (e.g. from Dock)
+                let bottomInset = screenVisibleFrame.origin.y - monitor.frame.minY
+                let centerY = displayBounds.maxY - bottomInset - targetHeight - 8
                 
                 let targetFrame = CGRect(x: centerX, y: centerY, width: targetWidth, height: targetHeight)
                 
