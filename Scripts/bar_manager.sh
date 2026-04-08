@@ -12,7 +12,7 @@ LOCK_FILE="/tmp/omniwm_bar_hold.lock" # Present while holding
 is_visible() { [ "$(cat "$STATE_FILE")" == "1" ]; }
 
 send_toggle() {
-    osascript -e 'tell application "System Events" to key code 11 using {shift down, control down, command down}'
+    /Applications/OmniWM.app/Contents/MacOS/omniwmctl command toggle-workspace-bar
 }
 
 case "$1" in
