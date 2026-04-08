@@ -400,6 +400,16 @@ final class SettingsStore {
         didSet { defaults.set(sessionSnapshotEnabled, forKey: Keys.sessionSnapshotEnabled) }
     }
 
+    /// Whether Zen Mode (zero-gap layout) is currently active.
+    var zenModeActive: Bool {
+        didSet { defaults.set(zenModeActive, forKey: Keys.zenModeActive) }
+    }
+
+    /// Gap size saved before entering Zen Mode so we can restore it on exit.
+    var zenModePreGapSize: Double {
+        didSet { defaults.set(zenModePreGapSize, forKey: Keys.zenModePreGapSize) }
+    }
+
     func loadPersistedWindowRestoreCatalog() -> PersistedWindowRestoreCatalog {
         guard let data = defaults.data(forKey: Keys.persistedWindowRestoreCatalog),
               let catalog = try? JSONDecoder().decode(PersistedWindowRestoreCatalog.self, from: data)
@@ -577,6 +587,8 @@ final class SettingsStore {
         warpSwitcherEnabled = defaults.object(forKey: Keys.warpSwitcherEnabled) as? Bool ?? true
         windowTrashEnabled = defaults.object(forKey: Keys.windowTrashEnabled) as? Bool ?? true
         sessionSnapshotEnabled = defaults.object(forKey: Keys.sessionSnapshotEnabled) as? Bool ?? true
+        zenModeActive = defaults.object(forKey: Keys.zenModeActive) as? Bool ?? false
+        zenModePreGapSize = defaults.object(forKey: Keys.zenModePreGapSize) as? Double ?? 10.0
 
         activeProfile = OmniProfile(rawValue: defaults.string(forKey: Keys.activeProfile) ?? "") ?? .official
         ExperimentFlags.shared.activeProfile = activeProfile
@@ -1084,14 +1096,13 @@ private enum Keys {
     static let quakeTerminalCustomFrameHeight = "settings.quakeTerminal.customFrameHeight"
 
     static let appearanceMode = "settings.appearanceMode"
-<<<<<<< HEAD
     static let sessionSnapshot = "session.windowSnapshot"
     static let activeProfile = "settings.activeProfile"
 
     static let warpSwitcherEnabled = "settings.godBuild.warpSwitcherEnabled"
     static let windowTrashEnabled = "settings.godBuild.windowTrashEnabled"
     static let sessionSnapshotEnabled = "settings.godBuild.sessionSnapshotEnabled"
-=======
     static let persistedWindowRestoreCatalog = "settings.restoreCatalog"
->>>>>>> origin/main
+    static let zenModeActive = "settings.godBuild.zenModeActive"
+    static let zenModePreGapSize = "settings.godBuild.zenModePreGapSize"
 }

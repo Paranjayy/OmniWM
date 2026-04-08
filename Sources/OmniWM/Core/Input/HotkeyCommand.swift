@@ -72,6 +72,12 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case openWarpSwitcher
     case centerFocusedFloatAtSize
 
+    // Zen / gap cycling
+    case toggleZenMode
+
+    // Floating window opacity cycling
+    case cycleFloatingOpacity
+
     var displayName: String {
         ActionCatalog.title(for: self) ?? String(describing: self)
     }

@@ -271,6 +271,8 @@ enum ActionCatalog {
             action(id: "captureWorkspaceSnapshot", command: .captureWorkspaceSnapshot, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: godLayer), keywords: ["snapshot", "save"]),
             action(id: "openWarpSwitcher", command: .openWarpSwitcher, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: godLayer), keywords: ["warp", "switcher"]),
             action(id: "centerFocusedFloatAtSize", command: .centerFocusedFloatAtSize, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Y), modifiers: UInt32(cmdKey)), keywords: ["center", "float", "god"]),
+            action(id: "toggleZenMode", command: .toggleZenMode, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Z), modifiers: godLayer), keywords: ["zen", "gaps", "focus", "distraction-free"]),
+            action(id: "cycleFloatingOpacity", command: .cycleFloatingOpacity, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_O), modifiers: godLayer), keywords: ["opacity", "transparent", "float"]),
         ])
 
         return specs
@@ -386,6 +388,8 @@ enum ActionCatalog {
         case .captureWorkspaceSnapshot: "Capture Workspace Layout Snapshot"
         case .openWarpSwitcher: "Open Warp Switcher"
         case .centerFocusedFloatAtSize: "Center Focused Float (1194x947)"
+        case .toggleZenMode: "Toggle Zen Mode (Zero Gaps)"
+        case .cycleFloatingOpacity: "Cycle Floating Window Opacity"
         }
     }
 
@@ -491,6 +495,11 @@ enum ActionCatalog {
             .scratchpadToggle
         case .openMenuAnywhere:
             .openMenuAnywhere
+        case .toggleZenMode, .cycleFloatingOpacity,
+             .trashFocusedWindow, .popLastTrashedWindow,
+             .testHaptic, .captureWorkspaceSnapshot,
+             .openWarpSwitcher, .centerFocusedFloatAtSize:
+            nil
         }
     }
 }

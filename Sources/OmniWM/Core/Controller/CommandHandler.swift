@@ -226,6 +226,12 @@ final class CommandHandler {
                     )
                 }
             }
+
+        case .toggleZenMode:
+            toggleZenMode()
+
+        case .cycleFloatingOpacity:
+            cycleFloatingWindowOpacity()
         }
 
         return .executed
@@ -233,6 +239,84 @@ final class CommandHandler {
 
     static func shouldIgnoreCommand(_ command: HotkeyCommand, isOverviewOpen: Bool) -> Bool {
         isOverviewOpen && command != .toggleOverview
+    }
+
+    // MARK: - Zen Mode
+
+    /// Toggle between zero-gap "Zen Mode" and the user's configured gap sizes.
+    private func toggleZenMode() {
+        guard let controller else { return }
+        let settings = controller.settings
+        let isGod = ExperimentFlags.shared.isGodBuildActive
+
+        if settings.zenModeActive {
+            // Restore pre-zen gap size
+            let restored = settings.zenModePreGapSize
+            settings.zenModeActive = false
+            controller.setGapSize(restored)
+            HapticManager.shared.trigger(.sharpClick)
+            HUDController.shared.showNotification(
+                title: isGod ? "ZEN MODE" : "GAPS",
+                icon: "rectangle.inset.filled",
+                message: "Gaps restored (\(Int(restored))px)",
+                highlightColor: .cyan
+            )
+        } else {
+            // Save current gap size and zero-out
+            settings.zenModePreGapSize = settings.gapSize
+            settings.zenModeActive = true
+            controller.setGapSize(0)
+            HapticManager.shared.trigger(.alignment)
+            HUDController.shared.showNotification(
+                title: isGod ? "ZEN MODE" : "GAPS",
+                icon: "rectangle.fill",
+                message: "Zen Mode ON — gaps removed",
+                highlightColor: .mint
+            )
+        }
+    }
+
+    // MARK: - Floating Opacity Cycling
+
+    /// Cycle the opacity of the focused floating window through preset levels: 1.0 → 0.85 → 0.70 → 0.50 → 1.0
+    private func cycleFloatingWindowOpacity() {
+        guard let controller,
+              let token = controller.focusedWindowToken(),
+              let entry = controller.workspaceManager.entry(for: token),
+              entry.mode == .floating
+        else { return }
+
+        let opacitySteps: [CGFloat] = [1.0, 0.85, 0.70, 0.50]
+
+        let axRef = entry.axRef
+        // Read current alpha via AX
+        var currentAlpha: CGFloat = 1.0
+        var cfValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(axRef, "AXAlpha" as CFString, &cfValue) == .success,
+           let val = cfValue as? NSNumber
+        {
+            currentAlpha = CGFloat(val.doubleValue)
+        }
+
+        // Find the next step
+        let tolerance: CGFloat = 0.05
+        let currentIndex = opacitySteps.firstIndex(where: { abs($0 - currentAlpha) < tolerance }) ?? 0
+        let nextAlpha = opacitySteps[(currentIndex + 1) % opacitySteps.count]
+
+        // Apply via CGSSetWindowAlpha (private API surface) or AX
+        let windowId = UInt32(entry.windowId)
+        var alpha = Float(nextAlpha)
+        SkyLight.shared.setWindowAlpha(windowId, alpha: alpha)
+        _ = alpha  // suppress unused warning
+
+        let isGod = ExperimentFlags.shared.isGodBuildActive
+        HapticManager.shared.trigger(.sharpClick)
+        HUDController.shared.showNotification(
+            title: isGod ? "GOD BUILD" : "FLOAT",
+            icon: "square.3.layers.3d",
+            message: "Window opacity: \(Int(nextAlpha * 100))%",
+            highlightColor: .purple
+        )
     }
 
     private func layoutHandler<T>(as capability: T.Type) -> T? {
