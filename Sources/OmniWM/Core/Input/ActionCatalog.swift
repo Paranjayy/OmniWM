@@ -109,8 +109,8 @@ enum ActionCatalog {
     private static func buildSpecs() -> [ActionSpec] {
         var specs: [ActionSpec] = []
 
-        let rcmdLayer = UInt32(cmdKey | controlKey | shiftKey)      // Shift + Ctrl + Cmd
-        let roptLayer = UInt32(cmdKey | controlKey | optionKey)     // Ctrl + Opt + Cmd (Meh)
+        let rcmdLayer = UInt32(cmdKey | controlKey | shiftKey)      // Shift + Ctrl + Cmd (RCmd)
+        let roptLayer = UInt32(cmdKey | controlKey | optionKey)     // Ctrl + Opt + Cmd (ROpt / God Layer)
         let hyperLayer = UInt32(cmdKey | controlKey | optionKey | shiftKey) // 4-keys (Hyper)
 
         for (idx, code) in digitCodes.enumerated() {
@@ -137,7 +137,7 @@ enum ActionCatalog {
                 id: "workspaceBackAndForth",
                 command: .workspaceBackAndForth,
                 category: .workspace,
-                binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: roptLayer),
+                binding: .unassigned,
                 keywords: ["back and forth", "previous workspace"]
             )
         )
@@ -159,7 +159,7 @@ enum ActionCatalog {
                 id: "focusPrevious",
                 command: .focusPrevious,
                 category: .focus,
-                binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: hyperLayer),
+                binding: KeyBinding(keyCode: UInt32(kVK_Tab), modifiers: roptLayer),
                 keywords: ["last focused", "recent window"]
             )
         )
@@ -225,7 +225,7 @@ enum ActionCatalog {
             action(id: "cycleColumnWidthForward", command: .cycleColumnWidthForward, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Period), modifiers: hyperLayer)),
             action(id: "cycleColumnWidthBackward", command: .cycleColumnWidthBackward, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Comma), modifiers: hyperLayer)),
             action(id: "toggleColumnFullWidth", command: .toggleColumnFullWidth, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_F), modifiers: hyperLayer)),
-            action(id: "balanceSizes", command: .balanceSizes, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: hyperLayer)),
+            action(id: "balanceSizes", command: .balanceSizes, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: UInt32(optionKey | shiftKey))),
             action(id: "moveToRoot", command: .moveToRoot, category: .layout, binding: .unassigned),
             action(id: "toggleSplit", command: .toggleSplit, category: .layout, binding: .unassigned),
             action(id: "swapSplit", command: .swapSplit, category: .layout, binding: .unassigned),

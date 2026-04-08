@@ -872,8 +872,7 @@ final class MouseEventHandler {
         guard controller.focusPolicyEngine.evaluate(.focusFollowsMouse).allowsFocusChange else {
             return
         }
-        guard !controller.workspaceManager.isNonManagedFocusActive,
-              !controller.workspaceManager.hasPendingNativeFullscreenTransition,
+        guard !controller.workspaceManager.hasPendingNativeFullscreenTransition,
               !controller.workspaceManager.isAppFullscreenActive else {
             return
         }

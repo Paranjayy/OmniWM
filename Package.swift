@@ -69,10 +69,10 @@ let package = Package(
         )
     ],
     targets: [
-//        .binaryTarget(
-//            name: "GhosttyKit",
-//            path: "Frameworks/GhosttyKit.xcframework"
-//        ),
+        .binaryTarget(
+            name: "GhosttyKit",
+            path: "Frameworks/GhosttyKit.xcframework"
+        ),
         .target(
             name: "COmniWMKernels",
             path: "Sources/COmniWMKernels",

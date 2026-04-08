@@ -88,6 +88,7 @@ final class HotkeyCenter {
         registrationFailures = plan.failures
         var nextId: UInt32 = 1
 
+        print("[HotkeyCenter] Registering \(plan.registrations.count) hotkeys...")
         for registration in plan.registrations {
             var ref: EventHotKeyRef?
             let hotKeyID = EventHotKeyID(signature: OSType(0x4F4D_4E49), id: nextId)
@@ -99,18 +100,26 @@ final class HotkeyCenter {
                 0,
                 &ref
             )
-            if status == noErr, let ref {
+
+            if status == noErr {
                 refs.append(ref)
                 idToCommand[nextId] = registration.command
+                if registration.binding.modifiers & UInt32(cmdKey | controlKey | shiftKey) == UInt32(cmdKey | controlKey | shiftKey) {
+                    print("[HotkeyCenter] Registered RCmd binding: \(registration.command) (ID: \(nextId))")
+                }
             } else {
-                registrationFailures[registration.command] = .systemReserved
+                print("[HotkeyCenter] Failed to register: \(registration.command) (status: \(status))")
             }
             nextId += 1
         }
     }
 
     private func dispatch(id: UInt32) {
-        guard let command = idToCommand[id] else { return }
+        guard let command = idToCommand[id] else { 
+            print("[HotkeyCenter] Received unknown HotkeyID: \(id)")
+            return 
+        }
+        print("[HotkeyCenter] Dispatching command: \(command)")
         onCommand?(command)
     }
 }
