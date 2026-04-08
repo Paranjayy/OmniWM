@@ -285,7 +285,7 @@
     },
     {
       "id": "workspaceBackAndForth",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "focusPrevious",
@@ -301,7 +301,7 @@
     },
     {
       "id": "cycleColumnWidthForward",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "toggleQuakeTerminal",
@@ -309,11 +309,11 @@
     },
     {
       "id": "switchWorkspace.previous",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "switchWorkspace.next",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "centerFocusedFloatAtSize",
@@ -337,27 +337,27 @@
     },
     {
       "id": "toggleWorkspaceLayout",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "toggleColumnTabbed",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "toggleColumnFullWidth",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "cycleColumnWidthBackward",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "moveColumn.left",
-      "binding": ""
+      "binding": "Unassigned"
     },
     {
       "id": "moveColumn.right",
-      "binding": ""
+      "binding": "Unassigned"
     }
   ],
   "hotkeysEnabled": true,
