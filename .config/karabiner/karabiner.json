@@ -999,12 +999,67 @@
                                     }
                                 ],
                                 "type": "basic"
+                            },
+                            {
+                                "conditions": [
+                                    {
+                                        "name": "right_opt_layer",
+                                        "type": "variable_if",
+                                        "value": 1
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "b",
+                                    "modifiers": {
+                                        "optional": [
+                                            "any"
+                                        ]
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "b",
+                                        "modifiers": [
+                                            "left_option",
+                                            "left_shift"
+                                        ]
+                                    }
+                                ],
+                                "type": "basic"
                             }
                         ]
                     },
                     {
                         "description": "[RCmd Layer] WM Management | Workspace Overview | Monitor Switch | Arc Little Arc",
                         "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "name": "rcmd_layer",
+                                        "type": "variable_if",
+                                        "value": 1
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "v",
+                                    "modifiers": {
+                                        "optional": [
+                                            "any"
+                                        ]
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "v",
+                                        "modifiers": [
+                                            "left_command",
+                                            "left_control",
+                                            "left_shift"
+                                        ]
+                                    }
+                                ],
+                                "type": "basic"
+                            },
                             {
                                 "conditions": [
                                     {
@@ -1215,6 +1270,7 @@
                                     {
                                         "key_code": "tab",
                                         "modifiers": [
+                                            "left_control",
                                             "left_option"
                                         ]
                                     }
@@ -1483,8 +1539,9 @@
                                     {
                                         "key_code": "left_arrow",
                                         "modifiers": [
-                                            "left_command",
-                                            "left_option"
+                                            "left_control",
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1510,8 +1567,9 @@
                                     {
                                         "key_code": "right_arrow",
                                         "modifiers": [
-                                            "left_command",
-                                            "left_option"
+                                            "left_control",
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1537,8 +1595,9 @@
                                     {
                                         "key_code": "up_arrow",
                                         "modifiers": [
-                                            "left_command",
-                                            "left_option"
+                                            "left_control",
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1564,8 +1623,9 @@
                                     {
                                         "key_code": "down_arrow",
                                         "modifiers": [
-                                            "left_command",
-                                            "left_option"
+                                            "left_control",
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1584,11 +1644,11 @@
                                 },
                                 "to": [
                                     {
-                                        "key_code": "left_arrow",
+                                        "key_code": "a",
                                         "modifiers": [
-                                            "left_command",
                                             "left_control",
-                                            "left_shift"
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1607,11 +1667,11 @@
                                 },
                                 "to": [
                                     {
-                                        "key_code": "right_arrow",
+                                        "key_code": "d",
                                         "modifiers": [
-                                            "left_command",
                                             "left_control",
-                                            "left_shift"
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1630,11 +1690,11 @@
                                 },
                                 "to": [
                                     {
-                                        "key_code": "up_arrow",
+                                        "key_code": "w",
                                         "modifiers": [
-                                            "left_command",
                                             "left_control",
-                                            "left_shift"
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1653,11 +1713,11 @@
                                 },
                                 "to": [
                                     {
-                                        "key_code": "down_arrow",
+                                        "key_code": "s",
                                         "modifiers": [
-                                            "left_command",
                                             "left_control",
-                                            "left_shift"
+                                            "left_shift",
+                                            "left_command"
                                         ]
                                     }
                                 ],
@@ -1722,7 +1782,7 @@
                                 },
                                 "to": [
                                     {
-                                        "shell_command": "/Users/paranjay/Developer/OmniWM/bar_manager.sh --reset"
+                                        "shell_command": "/Users/paranjay/Developer/OmniWM/bar_manager.sh --toggle"
                                     }
                                 ],
                                 "type": "basic"

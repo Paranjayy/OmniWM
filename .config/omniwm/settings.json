@@ -96,7 +96,7 @@
   "defaultLayoutType" : "niri",
   "dwindleDefaultSplitRatio" : 1,
   "dwindleMoveToRootStable" : true,
-  "dwindleSingleWindowAspectRatio" : "fill",
+  "dwindleSingleWindowAspectRatio" : "16:9",
   "dwindleSmartSplit" : true,
   "dwindleSplitWidthMultiplier" : 1,
   "dwindleUseGlobalGaps" : true,
@@ -220,11 +220,11 @@
       "id" : "focusUpOrRight"
     },
     {
-      "binding" : "Control+Shift+Command+Up Arrow",
+      "binding" : "Control+Shift+Command+W",
       "id" : "moveWindowToWorkspaceUp"
     },
     {
-      "binding" : "Control+Shift+Command+Down Arrow",
+      "binding" : "Control+Shift+Command+S",
       "id" : "moveWindowToWorkspaceDown"
     },
     {
@@ -308,11 +308,11 @@
       "id" : "toggleNativeFullscreen"
     },
     {
-      "binding" : "Control+Shift+Command+Left Arrow",
+      "binding" : "Control+Shift+Command+A",
       "id" : "moveColumn.left"
     },
     {
-      "binding" : "Control+Shift+Command+Right Arrow",
+      "binding" : "Control+Shift+Command+D",
       "id" : "moveColumn.right"
     },
     {
@@ -392,19 +392,19 @@
       "id" : "swapSplit"
     },
     {
-      "binding" : "Control+Option+Command+Left Arrow",
+      "binding" : "Unassigned",
       "id" : "resizeGrow.left"
     },
     {
-      "binding" : "Control+Option+Command+Right Arrow",
+      "binding" : "Unassigned",
       "id" : "resizeGrow.right"
     },
     {
-      "binding" : "Control+Option+Command+Up Arrow",
+      "binding" : "Unassigned",
       "id" : "resizeGrow.up"
     },
     {
-      "binding" : "Control+Option+Command+Down Arrow",
+      "binding" : "Unassigned",
       "id" : "resizeGrow.down"
     },
     {
@@ -484,7 +484,7 @@
       "id" : "toggleQuakeTerminal"
     },
     {
-      "binding" : "Unassigned",
+      "binding" : "Control+Shift+Command+V",
       "id" : "toggleWorkspaceLayout"
     },
     {
@@ -506,14 +506,14 @@
   "monitorOrientationSettings" : [
 
   ],
-  "mouseWarpAxis" : "horizontal",
+  "mouseWarpAxis" : "vertical",
   "mouseWarpMargin" : 1,
   "mouseWarpMonitorOrder" : [
 
   ],
   "moveMouseToFocusedWindow" : false,
   "niriAlwaysCenterSingleColumn" : true,
-  "niriCenterFocusedColumn" : "never",
+  "niriCenterFocusedColumn" : "onOverflow",
   "niriColumnWidthPresets" : [
     0.3333333333333333,
     0.5,
