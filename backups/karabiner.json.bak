@@ -198,10 +198,8 @@
                                     {
                                         "key_code": "t",
                                         "modifiers": [
-                                            "left_command",
                                             "left_control",
-                                            "left_option",
-                                            "left_shift"
+                                            "left_option"
                                         ]
                                     }
                                 ],
@@ -1246,7 +1244,6 @@
                                         "modifiers": [
                                             "left_command",
                                             "left_control",
-                                            "left_option",
                                             "left_shift"
                                         ]
                                     }
