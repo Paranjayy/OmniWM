@@ -235,3 +235,41 @@ better touch tool config - '/Users/paranjay/Library/Application Support/BetterTo
 
 ### 35. Window Snapping Fallback
 - Use BTT center-docking as a fallback for the "God-Float" script if native WM state is inconsistent.
+---
+
+## 🐛 Known Bug Ideas & Community Requests Tracker
+> *Issues from the community — ideas for permanent solutions.*
+
+### B1. Quake Terminal Opacity on New Tab (issue #195)
+- **Bug:** Quake terminal opacity changes when a new tab is created inside it.
+- **Idea:** Track quake terminal window state more granularly; restore the configured opacity after tab-creation events from the same PID.
+
+### B2. Window Persistence After Sleep/Wake (issues #168, #180)
+- **Bug:** After login from sleep, some windows lose their workspace assignments or positions.
+- **Idea:** Serialize workspace → window mapping to disk on lock/sleep events. On wake, run a fuzzy restore pass that matches windows by bundle ID + title heuristics to tolerate PID/windowId churn across sessions.
+
+### B3. Seamless Cmd+Tab Integration (issue #184)
+- **Bug:** Native Cmd+Tab doesn't switch to the app if it's in another workspace.
+- **Idea:** Hook `NSWorkspace.didActivateApplicationNotification` — when Cmd+Tab activates an app that lives on a different workspace, auto-switch to that workspace and reveal the window, making the transition invisible to the user.
+
+### B4. Browser Tab Floating on Detach (issue #159)
+- **Bug:** When a browser tab is torn off into a new window it appears floating instead of tiling.
+- **Idea:** Introduce a short-lived "grace" rule: if a new window from a tiled app appears within ~200 ms of a mouse-drag near the edge of an existing browser window, tile it automatically.
+
+### B5. Monitor Transition Handling (issue #182)
+- **Bug:** Windows are lost or misplaced when switching between single and multi-monitor setups (undocking/redocking).
+- **Idea:** Implement a "monitor adoption" phase. When a monitor is removed, park its workspaces on the primary monitor. When it reconnects (matched by display UUID), restore workspaces to the original monitor.
+
+### B6. Screenshot of Bordered Window is Blank (issue #150)
+- **Bug:** Screenshot of a focused bordered window captures the border overlay, leaving window content blank.
+- **Idea:** Audit the `capturePolicy: .excluded` path in `SurfacePolicy` to ensure it covers `CGWindowListCreateImage`-based captures (used by the system Screenshot tool and third-party apps).
+
+### B7. Menubar Access with Focus Follow Mouse (issue #191)
+- **Bug:** Cannot click top menubar entries for the right window when Focus Follow Mouse is on — hovering into the menu bar re-focuses a window and dismisses the menu.
+- **Idea:** Extend the existing `FocusPolicyLease` mechanism: subscribe to `NSMenuDidBeginTrackingNotification` and begin a lease that suspends focus-follows-mouse for the entire menu-tracking session, ending it on `NSMenuDidEndTrackingNotification`.
+
+### B8. Windows Not Opening on Focused Display (issue #194)
+- **Bug:** New windows don't always open on the currently focused monitor.
+- **Idea:** In `resolveWorkspaceForNewWindow`, elevate the weight of `interactionMonitorId` over the AX-observed window frame, since new windows often start at a default position that differs from where the user intends.
+
+

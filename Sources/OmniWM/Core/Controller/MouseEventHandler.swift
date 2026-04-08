@@ -579,8 +579,13 @@ final class MouseEventHandler {
 
         guard !state.isResizing else { return }
 
+        // Resolve workspace by cursor position so that resize-edge hover works
+        // on secondary monitors regardless of which monitor has keyboard focus
+        // (fixes issue #206).
+        let monitors = controller.workspaceManager.monitors
         guard let engine = controller.niriEngine,
-              let wsId = controller.activeWorkspace()?.id
+              let wsId = location.monitorApproximation(in: monitors)
+                  .flatMap({ controller.workspaceManager.activeWorkspaceOrFirst(on: $0.id) })?.id
         else {
             resetHoveredEdgesIfNeeded()
             return
@@ -895,7 +900,13 @@ final class MouseEventHandler {
     }
 
     private func resolveFocusFollowsMouseTarget(at location: CGPoint) -> FocusFollowsMouseTarget? {
-        guard let controller, let workspace = controller.activeWorkspace() else { return nil }
+        guard let controller else { return nil }
+        // Resolve the workspace by cursor position so that focus-follows-mouse
+        // works correctly when the cursor is on a secondary monitor (fixes #206).
+        let monitors = controller.workspaceManager.monitors
+        guard let monitor = location.monitorApproximation(in: monitors),
+              let workspace = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)
+        else { return nil }
 
         switch controller.settings.layoutType(for: workspace.name) {
         case .niri, .defaultLayout:

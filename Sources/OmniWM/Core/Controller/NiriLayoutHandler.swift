@@ -770,7 +770,7 @@ private func hasPendingNiriAnimationWork(
             isNonManagedFocusActive: snapshot.isNonManagedFocusActive,
             workspaceId: pass.wsId,
             engine: pass.engine,
-            directBorderUpdate: snapshot.useScrollAnimationPath,
+            directBorderUpdate: snapshot.useScrollAnimationPath || !motion.animationsEnabled,
             isInteractionWorkspace: snapshot.isInteractionWorkspace,
             canRestoreHiddenWorkspaceWindows: snapshot.isActiveWorkspace
         )
@@ -1179,6 +1179,10 @@ private func hasPendingNiriAnimationWork(
             presetColumnWidths: columnWidthPresets?.map { .proportion($0) },
             defaultColumnWidth: defaultColumnWidth.map { $0.map { CGFloat($0) } }
         )
+        // Re-sync per-monitor resolved settings so that any monitor without a
+        // per-monitor override picks up the new global value immediately, without
+        // requiring a restart (fixes issue #198).
+        syncMonitorsToNiriEngine()
         controller.layoutRefreshController.requestRelayout(reason: .layoutConfigChanged)
     }
 
