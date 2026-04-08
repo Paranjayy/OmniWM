@@ -108,7 +108,7 @@
   "hiddenBarIsCollapsed" : false,
   "hotkeyBindings" : [
     {
-      "binding" : "Control+Option+Command+1",
+      "binding" : "Control+Shift+Command+1",
       "id" : "switchWorkspace.0"
     },
     {
@@ -116,7 +116,7 @@
       "id" : "moveToWorkspace.0"
     },
     {
-      "binding" : "Control+Option+Command+2",
+      "binding" : "Control+Shift+Command+2",
       "id" : "switchWorkspace.1"
     },
     {
@@ -124,7 +124,7 @@
       "id" : "moveToWorkspace.1"
     },
     {
-      "binding" : "Control+Option+Command+3",
+      "binding" : "Control+Shift+Command+3",
       "id" : "switchWorkspace.2"
     },
     {
@@ -132,7 +132,7 @@
       "id" : "moveToWorkspace.2"
     },
     {
-      "binding" : "Control+Option+Command+4",
+      "binding" : "Control+Shift+Command+4",
       "id" : "switchWorkspace.3"
     },
     {
@@ -140,7 +140,7 @@
       "id" : "moveToWorkspace.3"
     },
     {
-      "binding" : "Control+Option+Command+5",
+      "binding" : "Control+Shift+Command+5",
       "id" : "switchWorkspace.4"
     },
     {
@@ -148,7 +148,7 @@
       "id" : "moveToWorkspace.4"
     },
     {
-      "binding" : "Control+Option+Command+6",
+      "binding" : "Control+Shift+Command+6",
       "id" : "switchWorkspace.5"
     },
     {
@@ -156,7 +156,7 @@
       "id" : "moveToWorkspace.5"
     },
     {
-      "binding" : "Control+Option+Command+7",
+      "binding" : "Control+Shift+Command+7",
       "id" : "switchWorkspace.6"
     },
     {
@@ -164,7 +164,7 @@
       "id" : "moveToWorkspace.6"
     },
     {
-      "binding" : "Control+Option+Command+8",
+      "binding" : "Control+Shift+Command+8",
       "id" : "switchWorkspace.7"
     },
     {
@@ -172,7 +172,7 @@
       "id" : "moveToWorkspace.7"
     },
     {
-      "binding" : "Control+Option+Command+9",
+      "binding" : "Control+Shift+Command+9",
       "id" : "switchWorkspace.8"
     },
     {
@@ -180,15 +180,15 @@
       "id" : "moveToWorkspace.8"
     },
     {
-      "binding" : "Control+Option+Command+Tab",
+      "binding" : "Control+Shift+Command+Tab",
       "id" : "workspaceBackAndForth"
     },
     {
-      "binding" : "Control+Option+Command+.",
+      "binding" : "Control+Shift+Command+.",
       "id" : "switchWorkspace.next"
     },
     {
-      "binding" : "Control+Option+Command+,",
+      "binding" : "Control+Shift+Command+,",
       "id" : "switchWorkspace.previous"
     },
     {
@@ -220,11 +220,11 @@
       "id" : "focusUpOrRight"
     },
     {
-      "binding" : "Control+Option+Command+Up Arrow",
+      "binding" : "Control+Shift+Command+Up Arrow",
       "id" : "moveWindowToWorkspaceUp"
     },
     {
-      "binding" : "Control+Option+Command+Down Arrow",
+      "binding" : "Control+Shift+Command+Down Arrow",
       "id" : "moveWindowToWorkspaceDown"
     },
     {
@@ -300,7 +300,7 @@
       "id" : "focusMonitorLast"
     },
     {
-      "binding" : "Control+Option+Command+F",
+      "binding" : "Control+Shift+Command+F",
       "id" : "toggleFullscreen"
     },
     {
@@ -308,11 +308,11 @@
       "id" : "toggleNativeFullscreen"
     },
     {
-      "binding" : "Control+Option+Command+Left Arrow",
+      "binding" : "Control+Shift+Command+Left Arrow",
       "id" : "moveColumn.left"
     },
     {
-      "binding" : "Control+Option+Command+Right Arrow",
+      "binding" : "Control+Shift+Command+Right Arrow",
       "id" : "moveColumn.right"
     },
     {
@@ -364,11 +364,11 @@
       "id" : "focusColumn.8"
     },
     {
-      "binding" : "Control+Option+Command+]",
+      "binding" : "Control+Shift+Command+]",
       "id" : "cycleColumnWidthForward"
     },
     {
-      "binding" : "Control+Option+Command+[",
+      "binding" : "Control+Shift+Command+[",
       "id" : "cycleColumnWidthBackward"
     },
     {
@@ -392,19 +392,19 @@
       "id" : "swapSplit"
     },
     {
-      "binding" : "Control+Option+Command+Left Arrow",
+      "binding" : "Control+Shift+Command+Left Arrow",
       "id" : "resizeGrow.left"
     },
     {
-      "binding" : "Control+Option+Command+Right Arrow",
+      "binding" : "Control+Shift+Command+Right Arrow",
       "id" : "resizeGrow.right"
     },
     {
-      "binding" : "Control+Option+Command+Up Arrow",
+      "binding" : "Control+Shift+Command+Up Arrow",
       "id" : "resizeGrow.up"
     },
     {
-      "binding" : "Control+Option+Command+Down Arrow",
+      "binding" : "Control+Shift+Command+Down Arrow",
       "id" : "resizeGrow.down"
     },
     {
@@ -444,11 +444,11 @@
       "id" : "preselectClear"
     },
     {
-      "binding" : "Control+Option+Command+Space",
+      "binding" : "Control+Shift+Command+Space",
       "id" : "openCommandPalette"
     },
     {
-      "binding" : "Control+Option+Command+R",
+      "binding" : "Control+Shift+Command+R",
       "id" : "raiseAllFloatingWindows"
     },
     {
@@ -456,7 +456,7 @@
       "id" : "rescueOffscreenWindows"
     },
     {
-      "binding" : "Control+Option+Command+G",
+      "binding" : "Control+Shift+Command+G",
       "id" : "toggleFocusedWindowFloating"
     },
     {
@@ -472,7 +472,7 @@
       "id" : "openMenuAnywhere"
     },
     {
-      "binding" : "Control+Option+Command+B",
+      "binding" : "Control+Shift+Command+B",
       "id" : "toggleWorkspaceBarVisibility"
     },
     {
@@ -488,7 +488,7 @@
       "id" : "toggleWorkspaceLayout"
     },
     {
-      "binding" : "Control+Option+Command+O",
+      "binding" : "Control+Shift+Command+O",
       "id" : "toggleOverview"
     }
   ],

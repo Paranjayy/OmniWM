@@ -119,7 +119,7 @@ enum ActionCatalog {
                     id: "switchWorkspace.\(idx)",
                     command: .switchWorkspace(idx),
                     category: .workspace,
-                    binding: KeyBinding(keyCode: code, modifiers: roptLayer)
+                    binding: KeyBinding(keyCode: code, modifiers: rcmdLayer)
                 )
             )
             specs.append(
