@@ -23,8 +23,10 @@ Here is a spectrum of wild, productivity-enhancing ideas for building the ultima
 - **Ghost Mode Layers**: A hotkey that dims all windows that are *not* currently focused to 40% opacity and blurs them, giving you complete tunnel-vision focus on the active app.
 - **Dynamic Gaps**: Padding between windows expands slightly when you aren't actively typing, providing a "relaxed" aesthetic, and tightens to 0px gaps when you are typing fast (focus mode).
 
-## 🖱️ BetterTouchTool Synergy & Inputs
-- **Trackpad Sigils**: Seamlessly integrate BetterTouchTool to trigger OmniWM commands via trackpad gestures. Swiping four fingers down collapses all windows; drawing an "O" shape opens the workspace visual dashboard.
+## 🖱️ BetterTouchTool, Karabiner & Raycast Synergy
+- **Trackpad Sigils & Gestures**: Seamlessly integrate BetterTouchTool to trigger OmniWM commands via trackpad gestures. Swiping four fingers down collapses all windows; drawing an "O" shape opens the OmniWM workspace visual dashboard.
+- **Karabiner Hyper-Layer Deep Integration**: Expand `karabiner.json` variables to be context-aware. If moving a window via `RCmd+Shift+Arrows` hits the edge of a monitor, Karabiner sends a webhook/Raycast deep link to trigger OmniWM to immediately switch contexts or throw the window to the iPad/secondary screen. 
+- **Raycast Command Center API**: Expose OmniWM's internal floating and snapping logic to a custom Raycast extension. Instead of just keyboard shortcuts, you pop open Raycast and type `Float Chat` to grab the ChatGPT window, float it, and fade into the background. Let Raycast handle the NLP, let OmniWM handle the execution.
 - **Mouse Chords / Advanced Clicks**: Holding Right-Click + Left-Clicking cycles between OmniWM floating windows without needing to reach for the keyboard.
 
 ## ⏳ Temporal Layouts & Timelines
