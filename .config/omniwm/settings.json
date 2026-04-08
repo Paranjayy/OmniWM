@@ -285,7 +285,7 @@
     },
     {
       "id": "workspaceBackAndForth",
-      "binding": "Option+Tab"
+      "binding": ""
     },
     {
       "id": "focusPrevious",
@@ -301,7 +301,7 @@
     },
     {
       "id": "cycleColumnWidthForward",
-      "binding": "Control+Command+Shift+N"
+      "binding": ""
     },
     {
       "id": "toggleQuakeTerminal",
@@ -309,11 +309,11 @@
     },
     {
       "id": "switchWorkspace.previous",
-      "binding": "Control+Option+U"
+      "binding": ""
     },
     {
       "id": "switchWorkspace.next",
-      "binding": "Control+Option+I"
+      "binding": ""
     },
     {
       "id": "centerFocusedFloatAtSize",
@@ -334,6 +334,30 @@
     {
       "id": "resizeGrow.right",
       "binding": "Control+Command+Option+Right Arrow"
+    },
+    {
+      "id": "toggleWorkspaceLayout",
+      "binding": ""
+    },
+    {
+      "id": "toggleColumnTabbed",
+      "binding": ""
+    },
+    {
+      "id": "toggleColumnFullWidth",
+      "binding": ""
+    },
+    {
+      "id": "cycleColumnWidthBackward",
+      "binding": ""
+    },
+    {
+      "id": "moveColumn.left",
+      "binding": ""
+    },
+    {
+      "id": "moveColumn.right",
+      "binding": ""
     }
   ],
   "hotkeysEnabled": true,
