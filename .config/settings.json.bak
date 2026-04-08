@@ -484,7 +484,7 @@
       "id": "toggleQuakeTerminal"
     },
     {
-      "binding": "Unassigned",
+      "binding": "Control+Shift+Command+V",
       "id": "toggleWorkspaceLayout"
     },
     {
@@ -537,7 +537,7 @@
   "version": 4,
   "workspaceBarBackgroundOpacity": 0,
   "workspaceBarDeduplicateAppIcons": false,
-  "workspaceBarEnabled": true,
+  "workspaceBarEnabled": false,
   "workspaceBarHeight": 20,
   "workspaceBarHideEmptyWorkspaces": true,
   "workspaceBarNotchAware": true,
