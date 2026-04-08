@@ -308,11 +308,11 @@
       "id" : "toggleNativeFullscreen"
     },
     {
-      "binding" : "Control+Shift+Command+A",
+      "binding" : "Control+Shift+Command+Left Arrow",
       "id" : "moveColumn.left"
     },
     {
-      "binding" : "Control+Shift+Command+D",
+      "binding" : "Control+Shift+Command+Right Arrow",
       "id" : "moveColumn.right"
     },
     {
