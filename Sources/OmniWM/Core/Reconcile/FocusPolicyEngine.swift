@@ -75,16 +75,27 @@ final class FocusPolicyEngine {
     func evaluate(_ request: FocusPolicyRequest) -> FocusPolicyDecision {
         pruneExpiredLeasesIfNeeded()
 
+        let decision: FocusPolicyDecision
         switch request {
         case .focusFollowsMouse:
-            guard let lease = suppressingFocusFollowsMouseLease() else { return .allow }
-            return .deny(reason: lease.reason)
+            if let lease = suppressingFocusFollowsMouseLease() {
+                decision = .deny(reason: "suppressed by lease: \(lease.owner) (\(lease.reason))")
+            } else {
+                decision = .allow
+            }
         case let .managedAppActivation(source):
             if let menuLease = leasesByOwner[.nativeMenu], !source.isAuthoritative {
-                return .deny(reason: menuLease.reason)
+                decision = .deny(reason: menuLease.reason)
+            } else {
+                decision = .allow
             }
-            return .allow
         }
+
+        if !decision.allowsFocusChange {
+            print("[FocusPolicyEngine] DENIED \(request) - Reason: \(decision.reason ?? "unknown")")
+        }
+
+        return decision
     }
 
     private func pruneExpiredLeasesIfNeeded() {

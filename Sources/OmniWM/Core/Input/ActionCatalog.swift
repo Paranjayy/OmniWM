@@ -119,7 +119,7 @@ enum ActionCatalog {
                     id: "switchWorkspace.\(idx)",
                     command: .switchWorkspace(idx),
                     category: .workspace,
-                    binding: KeyBinding(keyCode: code, modifiers: rcmdLayer)
+                    binding: KeyBinding(keyCode: code, modifiers: roptLayer)
                 )
             )
             specs.append(
@@ -203,8 +203,8 @@ enum ActionCatalog {
         specs.append(contentsOf: [
             action(id: "toggleFullscreen", command: .toggleFullscreen, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_Return), modifiers: hyperLayer)),
             action(id: "toggleNativeFullscreen", command: .toggleNativeFullscreen, category: .layout, binding: .unassigned),
-            action(id: "moveColumn.left", command: .moveColumn(.left), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: rcmdLayer)),
-            action(id: "moveColumn.right", command: .moveColumn(.right), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_D), modifiers: rcmdLayer)),
+            action(id: "moveColumn.left", command: .moveColumn(.left), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: rcmdLayer)),
+            action(id: "moveColumn.right", command: .moveColumn(.right), category: .column, binding: KeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: rcmdLayer)),
             action(id: "toggleColumnTabbed", command: .toggleColumnTabbed, category: .column, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_T), modifiers: rcmdLayer)),
             action(id: "focusColumnFirst", command: .focusColumnFirst, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_Home), modifiers: rcmdLayer)),
             action(id: "focusColumnLast", command: .focusColumnLast, category: .focus, binding: KeyBinding(keyCode: UInt32(kVK_End), modifiers: rcmdLayer)),
@@ -270,7 +270,7 @@ enum ActionCatalog {
             action(id: "testHaptic", command: .testHaptic, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_H), modifiers: godLayer), keywords: ["haptic", "test"]),
             action(id: "captureWorkspaceSnapshot", command: .captureWorkspaceSnapshot, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_S), modifiers: godLayer), keywords: ["snapshot", "save"]),
             action(id: "openWarpSwitcher", command: .openWarpSwitcher, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_W), modifiers: godLayer), keywords: ["warp", "switcher"]),
-            action(id: "centerFocusedFloatAtSize", command: .centerFocusedFloatAtSize, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Y), modifiers: UInt32(cmdKey)), keywords: ["center", "float", "god"]),
+            action(id: "centerFocusedFloatAtSize", command: .centerFocusedFloatAtSize, category: .layout, binding: KeyBinding(keyCode: UInt32(kVK_ANSI_Y), modifiers: roptLayer), keywords: ["center", "float", "god"]),
         ])
 
         return specs

@@ -216,6 +216,10 @@ final class CommandHandler {
                     AXUIElementSetAttributeValue(entry.axRef, kAXPositionAttribute as CFString, pointValue)
                     AXUIElementSetAttributeValue(entry.axRef, kAXSizeAttribute as CFString, sizeValue)
                     
+                    // Warp mouse to center of the centered window to ensure focus and usability
+                    let targetCenter = CGPoint(x: targetFrame.midX, y: targetFrame.midY)
+                    CGWarpMouseCursorPosition(targetCenter)
+                    
                     let isGod = ExperimentFlags.shared.isGodBuildActive
                     HapticManager.shared.trigger(.alignment)
                     HUDController.shared.showNotification(

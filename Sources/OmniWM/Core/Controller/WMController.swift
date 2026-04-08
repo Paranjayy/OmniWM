@@ -190,6 +190,12 @@ final class WMController {
                 self.focusPolicyEngine.endLease(owner: .nativeMenu)
             }
         }
+        settings.onFocusFollowsMouseChanged = { [weak self] enabled in
+            self?.setFocusFollowsMouse(enabled)
+        }
+        settings.onMoveMouseToFocusedWindowChanged = { [weak self] enabled in
+            self?.setMoveMouseToFocusedWindow(enabled)
+        }
     }
 
     func applyPersistedSettings(_ settings: SettingsStore) {

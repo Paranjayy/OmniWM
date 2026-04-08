@@ -11,6 +11,8 @@ final class SettingsStore {
     private let defaults: UserDefaults
 
     var onIPCEnabledChanged: (@MainActor (Bool) -> Void)?
+    var onFocusFollowsMouseChanged: (@MainActor (Bool) -> Void)?
+    var onMoveMouseToFocusedWindowChanged: (@MainActor (Bool) -> Void)?
 
     var activeProfile: OmniProfile {
         didSet {
@@ -24,11 +26,17 @@ final class SettingsStore {
     }
 
     var focusFollowsMouse: Bool {
-        didSet { defaults.set(focusFollowsMouse, forKey: Keys.focusFollowsMouse) }
+        didSet {
+            defaults.set(focusFollowsMouse, forKey: Keys.focusFollowsMouse)
+            onFocusFollowsMouseChanged?(focusFollowsMouse)
+        }
     }
 
     var moveMouseToFocusedWindow: Bool {
-        didSet { defaults.set(moveMouseToFocusedWindow, forKey: Keys.moveMouseToFocusedWindow) }
+        didSet {
+            defaults.set(moveMouseToFocusedWindow, forKey: Keys.moveMouseToFocusedWindow)
+            onMoveMouseToFocusedWindowChanged?(moveMouseToFocusedWindow)
+        }
     }
 
     var focusFollowsWindowToMonitor: Bool {
