@@ -139,3 +139,7 @@ james clear
  
 - Visual Shortcut Map: A script to generate a visual HTML/Markdown guide of all RCmd/ROpt layers (inspired by davis7.sh). mun!\n
 - workspace saving to avoiding same ordering manually or stuffs
+
+## Current Issues and Pending Features
+- **Bug**: `RCmd+G` / `RCmd+Y` (Center Float Action) sometimes randomly breaks the native macOS "focus follows mouse" behavior. Needs investigation into how `center_float.sh` or Accessibility layer assertions interfere with macOS native focus polling.
+- **Enhancement**: Bar Visibility lifecycle. When pressing `RCmd / ROpt`, the workspace bar should remain visible while performing actions (e.g., fast workflow state changes), and then auto-hide 5 seconds after releasing the modifiers. (Currently `bar_manager.sh` attempts this but might need refinement for reliability and uninterrupted workflow integration).
