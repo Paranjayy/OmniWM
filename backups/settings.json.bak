@@ -1,4 +1,5 @@
 {
+  "animationsEnabled": true,
   "appRules": [
     {
       "bundleId": "com.openai.codex",
@@ -105,10 +106,262 @@
   "gestureFingerCount": 3,
   "gestureInvertDirection": true,
   "hiddenBarIsCollapsed": false,
-  "hotkeyBindings": [],
+  "hotkeyBindings": [
+    {
+      "id": "switchWorkspace.0",
+      "binding": "Control+Command+Shift+1"
+    },
+    {
+      "id": "switchWorkspace.1",
+      "binding": "Control+Command+Shift+2"
+    },
+    {
+      "id": "switchWorkspace.2",
+      "binding": "Control+Command+Shift+3"
+    },
+    {
+      "id": "switchWorkspace.3",
+      "binding": "Control+Command+Shift+4"
+    },
+    {
+      "id": "switchWorkspace.4",
+      "binding": "Control+Command+Shift+5"
+    },
+    {
+      "id": "switchWorkspace.5",
+      "binding": "Control+Command+Shift+6"
+    },
+    {
+      "id": "switchWorkspace.6",
+      "binding": "Control+Command+Shift+7"
+    },
+    {
+      "id": "switchWorkspace.7",
+      "binding": "Control+Command+Shift+8"
+    },
+    {
+      "id": "switchWorkspace.8",
+      "binding": "Control+Command+Shift+9"
+    },
+    {
+      "id": "moveToWorkspace.0",
+      "binding": "Control+Command+Option+Shift+1"
+    },
+    {
+      "id": "moveToWorkspace.1",
+      "binding": "Control+Command+Option+Shift+2"
+    },
+    {
+      "id": "moveToWorkspace.2",
+      "binding": "Control+Command+Option+Shift+3"
+    },
+    {
+      "id": "moveToWorkspace.3",
+      "binding": "Control+Command+Option+Shift+4"
+    },
+    {
+      "id": "moveToWorkspace.4",
+      "binding": "Control+Command+Option+Shift+5"
+    },
+    {
+      "id": "moveToWorkspace.5",
+      "binding": "Control+Command+Option+Shift+6"
+    },
+    {
+      "id": "moveToWorkspace.6",
+      "binding": "Control+Command+Option+Shift+7"
+    },
+    {
+      "id": "moveToWorkspace.7",
+      "binding": "Control+Command+Option+Shift+8"
+    },
+    {
+      "id": "moveToWorkspace.8",
+      "binding": "Control+Command+Option+Shift+9"
+    },
+    {
+      "id": "focusColumn.0",
+      "binding": "Control+Option+1"
+    },
+    {
+      "id": "focusColumn.1",
+      "binding": "Control+Option+2"
+    },
+    {
+      "id": "focusColumn.2",
+      "binding": "Control+Option+3"
+    },
+    {
+      "id": "focusColumn.3",
+      "binding": "Control+Option+4"
+    },
+    {
+      "id": "focusColumn.4",
+      "binding": "Control+Option+5"
+    },
+    {
+      "id": "focusColumn.5",
+      "binding": "Control+Option+6"
+    },
+    {
+      "id": "focusColumn.6",
+      "binding": "Control+Option+7"
+    },
+    {
+      "id": "focusColumn.7",
+      "binding": "Control+Option+8"
+    },
+    {
+      "id": "focusColumn.8",
+      "binding": "Control+Option+9"
+    },
+    {
+      "id": "focus.up",
+      "binding": "Control+Command+Option+Shift+Up Arrow"
+    },
+    {
+      "id": "focus.down",
+      "binding": "Control+Command+Option+Shift+Down Arrow"
+    },
+    {
+      "id": "focus.left",
+      "binding": "Control+Command+Option+Shift+Left Arrow"
+    },
+    {
+      "id": "focus.right",
+      "binding": "Control+Command+Option+Shift+Right Arrow"
+    },
+    {
+      "id": "move.up",
+      "binding": "Control+Option+Shift+Up Arrow"
+    },
+    {
+      "id": "move.down",
+      "binding": "Control+Option+Shift+Down Arrow"
+    },
+    {
+      "id": "move.left",
+      "binding": "Control+Option+Shift+Left Arrow"
+    },
+    {
+      "id": "move.right",
+      "binding": "Control+Option+Shift+Right Arrow"
+    },
+    {
+      "id": "moveColumn.left",
+      "binding": "Control+Command+Shift+Left Arrow"
+    },
+    {
+      "id": "moveColumn.right",
+      "binding": "Control+Command+Shift+Right Arrow"
+    },
+    {
+      "id": "moveWindowToWorkspaceUp",
+      "binding": "Control+Command+Shift+Up Arrow"
+    },
+    {
+      "id": "moveWindowToWorkspaceDown",
+      "binding": "Control+Command+Shift+Down Arrow"
+    },
+    {
+      "id": "toggleFullscreen",
+      "binding": "Control+Command+Shift+F"
+    },
+    {
+      "id": "toggleOverview",
+      "binding": "Control+Command+Shift+O"
+    },
+    {
+      "id": "toggleFocusedWindowFloating",
+      "binding": "Control+Command+Shift+G"
+    },
+    {
+      "id": "raiseAllFloatingWindows",
+      "binding": "Control+Command+Shift+R"
+    },
+    {
+      "id": "openCommandPalette",
+      "binding": "Control+Command+Shift+Space"
+    },
+    {
+      "id": "workspaceBackAndForth",
+      "binding": ""
+    },
+    {
+      "id": "focusPrevious",
+      "binding": "Control+Option+Tab"
+    },
+    {
+      "id": "toggleWorkspaceBarVisibility",
+      "binding": "Control+Command+Shift+B"
+    },
+    {
+      "id": "focusMonitorNext",
+      "binding": "Control+Command+M"
+    },
+    {
+      "id": "cycleColumnWidthForward",
+      "binding": ""
+    },
+    {
+      "id": "toggleQuakeTerminal",
+      "binding": "Control+Option+`"
+    },
+    {
+      "id": "switchWorkspace.previous",
+      "binding": ""
+    },
+    {
+      "id": "switchWorkspace.next",
+      "binding": ""
+    },
+    {
+      "id": "centerFocusedFloatAtSize",
+      "binding": "Control+Command+Shift+Y"
+    },
+    {
+      "id": "resizeGrow.up",
+      "binding": "Control+Command+Option+Up Arrow"
+    },
+    {
+      "id": "resizeGrow.down",
+      "binding": "Control+Command+Option+Down Arrow"
+    },
+    {
+      "id": "resizeGrow.left",
+      "binding": "Control+Command+Option+Left Arrow"
+    },
+    {
+      "id": "resizeGrow.right",
+      "binding": "Control+Command+Option+Right Arrow"
+    },
+    {
+      "id": "toggleWorkspaceLayout",
+      "binding": ""
+    },
+    {
+      "id": "toggleColumnTabbed",
+      "binding": ""
+    },
+    {
+      "id": "toggleColumnFullWidth",
+      "binding": ""
+    },
+    {
+      "id": "cycleColumnWidthBackward",
+      "binding": ""
+    },
+    {
+      "id": "moveColumn.left",
+      "binding": ""
+    },
+    {
+      "id": "moveColumn.right",
+      "binding": ""
+    }
+  ],
   "hotkeysEnabled": true,
   "ipcEnabled": false,
-  "schemaEpoch": 4,
   "monitorBarSettings": [],
   "monitorDwindleSettings": [],
   "monitorNiriSettings": [],
@@ -148,12 +401,8 @@
   "statusBarShowAppNames": true,
   "statusBarShowWorkspaceName": true,
   "statusBarUseWorkspaceId": true,
-  "activeProfile": "Official",
   "updateChecksEnabled": true,
   "version": 4,
-  "warpSwitcherEnabled": true,
-  "windowTrashEnabled": true,
-  "sessionSnapshotEnabled": true,
   "workspaceBarBackgroundOpacity": 0,
   "workspaceBarDeduplicateAppIcons": false,
   "workspaceBarEnabled": true,
@@ -162,6 +411,7 @@
   "workspaceBarNotchAware": true,
   "workspaceBarPosition": "belowMenuBar",
   "workspaceBarReserveLayoutSpace": false,
+  "workspaceBarShowFloatingWindows": true,
   "workspaceBarShowLabels": true,
   "workspaceBarWindowLevel": "floating",
   "workspaceBarXOffset": 0,
