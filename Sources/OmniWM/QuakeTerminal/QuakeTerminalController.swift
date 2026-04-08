@@ -263,6 +263,10 @@ final class QuakeTerminalController: NSObject, NSWindowDelegate, QuakeTerminalTa
         let tab = QuakeTerminalTab(splitContainer: splitContainer)
         tabs.append(tab)
         switchToTab(at: tabs.count - 1)
+        // Reapply the opacity config so the new Ghostty surface picks up the
+        // configured background-opacity. Without this, new tabs can render with
+        // a different opacity than the original tab (fixes issue #195).
+        reloadOpacityConfig()
         return tab
     }
 

@@ -22,6 +22,9 @@ final class ServiceLifecycleManager {
     private var workspaceObserver: NSObjectProtocol?
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
+    private var nativeMenuBeginObserver: NSObjectProtocol?
+    private var nativeMenuEndObserver: NSObjectProtocol?
+    private var autoSnapshotTask: Task<Void, Never>?
     private var permissionCheckerTask: Task<Void, Never>?
     private(set) var isSecureInputActive = false
     var accessibilityPermissionStreamProviderForTests: ((Bool) -> AsyncStream<Bool>)?
@@ -90,6 +93,7 @@ final class ServiceLifecycleManager {
         setupAppActivationObserver()
         setupAppHideObservers()
         setupSleepWakeObservation()
+        setupNativeMenuTrackingObservers()
         controller.workspaceManager.onGapsChanged = { [weak self] in
             self?.handleGapsChanged()
         }
@@ -97,6 +101,7 @@ final class ServiceLifecycleManager {
         performStartupRefresh()
         startSecureInputMonitor()
         startLockScreenObserver()
+        startAutoSnapshotTimer()
     }
 
     private func startLockScreenObserver() {
@@ -110,6 +115,73 @@ final class ServiceLifecycleManager {
             controller.serviceLifecycleManager.handleUnlockDetected()
         }
         controller.lockScreenObserver.start()
+    }
+
+    // Silently capture layout snapshots for all active workspaces every 5 minutes
+    // when the God Build session snapshot feature is enabled. This powers the
+    // "Layout Time Machine" — users can rewind to any snapshot from the last 100 minutes.
+    private static let autoSnapshotIntervalNanoseconds: UInt64 = 5 * 60 * 1_000_000_000  // 5 minutes
+
+    private func startAutoSnapshotTimer() {
+        autoSnapshotTask?.cancel()
+        autoSnapshotTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.autoSnapshotIntervalNanoseconds)
+                guard !Task.isCancelled else { return }
+                self?.performAutoSnapshot()
+            }
+        }
+    }
+
+    private func performAutoSnapshot() {
+        guard let controller,
+              ExperimentFlags.shared.isGodBuildActive,
+              controller.settings.sessionSnapshotEnabled
+        else { return }
+
+        for workspace in controller.workspaceManager.workspaces {
+            let windowCount = controller.workspaceWindowCount(for: workspace.id)
+            guard windowCount > 0 else { continue }
+            let layoutJSON = "{\"workspaceName\":\"\(workspace.name)\",\"windowCount\":\(windowCount),\"auto\":true}"
+            WorkspaceSnapshotManager.shared.captureAuto(
+                workspaceId: "\(workspace.id)",
+                layoutJSON: layoutJSON
+            )
+        }
+    }
+
+    // Observe the native macOS menu bar tracking so that focus-follows-mouse is
+    // suspended while any system menu is open. This prevents the focused window
+    // from changing while the user hovers over menubar items, fixing issues where
+    // menubar entries for the right window become unreachable (#131, #191).
+    private func setupNativeMenuTrackingObservers() {
+        guard let controller else { return }
+        let nc = NotificationCenter.default
+
+        nativeMenuBeginObserver = nc.addObserver(
+            forName: NSMenu.didBeginTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak controller] _ in
+            MainActor.assumeIsolated {
+                controller?.focusPolicyEngine.beginLease(
+                    owner: .nativeMenu,
+                    reason: "native_menu_tracking",
+                    suppressesFocusFollowsMouse: true,
+                    duration: nil
+                )
+            }
+        }
+
+        nativeMenuEndObserver = nc.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak controller] _ in
+            MainActor.assumeIsolated {
+                controller?.focusPolicyEngine.endLease(owner: .nativeMenu)
+            }
+        }
     }
 
     private func startSecureInputMonitor() {
@@ -364,11 +436,21 @@ final class ServiceLifecycleManager {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             wakeObserver = nil
         }
+        if let observer = nativeMenuBeginObserver {
+            NotificationCenter.default.removeObserver(observer)
+            nativeMenuBeginObserver = nil
+        }
+        if let observer = nativeMenuEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            nativeMenuEndObserver = nil
+        }
 
         controller.secureInputMonitor.stop()
         isSecureInputActive = false
         SecureInputIndicatorController.shared.hide()
         controller.lockScreenObserver.stop()
+        autoSnapshotTask?.cancel()
+        autoSnapshotTask = nil
         permissionCheckerTask?.cancel()
         permissionCheckerTask = nil
         controller.reconcileEnabledAndHotkeysState()

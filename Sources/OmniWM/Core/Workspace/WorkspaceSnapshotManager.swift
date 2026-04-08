@@ -42,6 +42,15 @@ public final class WorkspaceSnapshotManager {
     // MARK: - Capture
 
     public func capture(workspaceId: String, layoutJSON: String = "{}") {
+        captureInternal(workspaceId: workspaceId, layoutJSON: layoutJSON, silent: false)
+    }
+
+    /// Capture a snapshot without triggering haptics — used for background auto-snapshots.
+    public func captureAuto(workspaceId: String, layoutJSON: String = "{}") {
+        captureInternal(workspaceId: workspaceId, layoutJSON: layoutJSON, silent: true)
+    }
+
+    private func captureInternal(workspaceId: String, layoutJSON: String, silent: Bool) {
         let snapshot = Snapshot(
             id: UUID(),
             timestamp: Date(),
@@ -54,7 +63,9 @@ public final class WorkspaceSnapshotManager {
         if current.count > 20 { current.removeFirst(current.count - 20) }
         snapshots[workspaceId] = current
         saveToDisk()
-        HapticManager.shared.trigger(.sharpClick)
+        if !silent {
+            HapticManager.shared.trigger(.sharpClick)
+        }
     }
 
     // MARK: - Query

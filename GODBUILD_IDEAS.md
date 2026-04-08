@@ -264,9 +264,9 @@ better touch tool config - '/Users/paranjay/Library/Application Support/BetterTo
 - **Bug:** Screenshot of a focused bordered window captures the border overlay, leaving window content blank.
 - **Idea:** Audit the `capturePolicy: .excluded` path in `SurfacePolicy` to ensure it covers `CGWindowListCreateImage`-based captures (used by the system Screenshot tool and third-party apps).
 
-### B7. Menubar Access with Focus Follow Mouse (issue #191)
+### B7. Menubar Access with Focus Follow Mouse (issue #191) ✅ Fixed
 - **Bug:** Cannot click top menubar entries for the right window when Focus Follow Mouse is on — hovering into the menu bar re-focuses a window and dismisses the menu.
-- **Idea:** Extend the existing `FocusPolicyLease` mechanism: subscribe to `NSMenuDidBeginTrackingNotification` and begin a lease that suspends focus-follows-mouse for the entire menu-tracking session, ending it on `NSMenuDidEndTrackingNotification`.
+- **Fix:** Added `NSMenu.didBeginTrackingNotification` / `NSMenu.didEndTrackingNotification` observers in `ServiceLifecycleManager` that begin/end a `nativeMenu` lease on `FocusPolicyEngine`, suspending focus-follows-mouse for the entire native menu tracking session.
 
 ### B8. Windows Not Opening on Focused Display (issue #194)
 - **Bug:** New windows don't always open on the currently focused monitor.
