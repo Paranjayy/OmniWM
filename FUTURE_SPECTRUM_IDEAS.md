@@ -19,9 +19,14 @@ Here is a spectrum of wild, productivity-enhancing ideas for building the ultima
 ## 🚀 Chained Sequence States
 - **One-Key Bootstraps**: Extending the `Sequence Toggle` idea. You tap `Caps Lock -> W (Work)`. This instantly spins up Docker, opens Ghostty in the right column, drops Arc in the left column, and opens Spotify as a floating window.
 
-## 🎨 Aesthetic Overdrives
+## 🎨 Aesthetic Overdrives & Environmental Distinction
 - **Ghost Mode Layers**: A hotkey that dims all windows that are *not* currently focused to 40% opacity and blurs them, giving you complete tunnel-vision focus on the active app.
 - **Dynamic Gaps**: Padding between windows expands slightly when you aren't actively typing, providing a "relaxed" aesthetic, and tightens to 0px gaps when you are typing fast (focus mode).
+- **Physical "Friction Design" Overlays**: If you are in a repo labeled `[PROD]`, OmniWM forces your window gaps to turn deep red and sets your keyboard backlighting to a pulsating red via an API hook. You physically *feel* danger when editing critical code.
+
+## 🧠 Cognitive Compression & Zsh Hooks
+- **Terminal Branching = OmniWM Awareness**: Using Git hooks or `zsh-chpwd` precmd, every time you `cd` into a directory, it beams the repo context to OmniWM via IPC (e.g. `/tmp/omniwm.sock`). If you `cd` into a machine learning repo, OmniWM instantly changes the window borders of all overlapping apps to `#BD93F9` (Purple).
+- **Auto-Bootstrapped "00_START_HERE.md"**: An interactive script logic that hooks onto `git clone`. The second you clone a repository, Antigravity fires off a headless AI parsing tool to instantly generate a `00_START_HERE.md` architecture breakdown, so you never manually parse undocumented repos again.
 
 ## 🖱️ BetterTouchTool, Karabiner & Raycast Synergy
 - **Trackpad Sigils & Gestures**: Seamlessly integrate BetterTouchTool to trigger OmniWM commands via trackpad gestures. Swiping four fingers down collapses all windows; drawing an "O" shape opens the OmniWM workspace visual dashboard.
