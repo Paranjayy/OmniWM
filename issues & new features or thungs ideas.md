@@ -142,7 +142,8 @@ james clear
 
 ## Current Issues and Pending Features
 - **Bug**: `RCmd+G` / `RCmd+Y` (Center Float Action) sometimes randomly breaks the native macOS "focus follows mouse" behavior. Needs investigation into how `center_float.sh` or Accessibility layer assertions interfere with macOS native focus polling.
-- **Enhancement**: Bar Visibility lifecycle. When pressing `RCmd / ROpt`, the workspace bar should remain visible while performing actions (e.g., fast workflow state changes), and then auto-hide 5 seconds after releasing the modifiers. (Currently `bar_manager.sh` attempts this but might need refinement for reliability and uninterrupted workflow integration).
+- **Bug**: Fullscreen mode (`RCmd+F`) in any app breaks "Focus follows mouse" functionality. Focus synchronization appears to stall or stop polling when a window is in a native fullscreen state.
+- **Enhancement**: Bar Visibility lifecycle. [STABILIZED] Refactored `bar_manager.sh` with idempotent state-checking and a 5-second "protector" watchdog to ensure the bar auto-hides reliably even when using the official app binary.
 
 - more dwinddle config 
 - we can have waybar like shit for our mac if we want to idk and integrate it workspace bar or somethin just a thought also waybar like thing btt got recently btw

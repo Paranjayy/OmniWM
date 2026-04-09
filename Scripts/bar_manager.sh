@@ -1,34 +1,44 @@
 #!/bin/bash
 
-# OmniWM Dynamic Bar Manager (Stabilized v2)
+# OmniWM Dynamic Bar Manager (Official App Compatibility)
 # Implementation: Show while holding, Hide 5s after release.
-# Uses explicit idempotent commands to prevent state-sync bugs.
+# This script uses idempotent logic (check-then-toggle) to work 
+# flawlessly with the official OmniWM binary.
 
 LOCK_FILE="/tmp/omniwm_bar_hold.lock" # Present while holding
 
 CTL_BIN="/Applications/OmniWM.app/Contents/MacOS/omniwmctl"
 
-show_bar() {
-    $CTL_BIN command show-workspace-bar
+is_visible() {
+    # Check if ANY monitor has isVisible: true
+    $CTL_BIN query workspace-bar --format json | jq '.result.payload.monitors[].isVisible' 2>/dev/null | grep -q true
 }
 
-hide_bar() {
-    $CTL_BIN command hide-workspace-bar
+ensure_visible() {
+    if ! is_visible; then
+        $CTL_BIN command toggle-workspace-bar
+    fi
+}
+
+ensure_hidden() {
+    if is_visible; then
+        $CTL_BIN command toggle-workspace-bar
+    fi
 }
 
 case "$1" in
     --hold)
         touch "$LOCK_FILE"
-        show_bar
+        ensure_visible
         ;;
     --release)
         rm -f "$LOCK_FILE"
-        # Wait 5s before hiding
+        # The Protector: Wait 5s before force-hiding
         (
             sleep 5
             # ONLY hide if NOT holding again (lock file removed) 
             if [ ! -f "$LOCK_FILE" ]; then
-                hide_bar
+                ensure_hidden
             fi
         ) &
         ;;
@@ -37,6 +47,6 @@ case "$1" in
         ;;
     --reset)
         rm -f "$LOCK_FILE"
-        hide_bar
+        ensure_hidden
         ;;
 esac
