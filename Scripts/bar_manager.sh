@@ -1,27 +1,25 @@
 #!/bin/bash
 
-# OmniWM Dynamic Bar Manager
+# OmniWM Dynamic Bar Manager (Stabilized v2)
 # Implementation: Show while holding, Hide 5s after release.
-# Uses a lock file to ensure the hide timer respects the hold duration.
+# Uses explicit idempotent commands to prevent state-sync bugs.
 
-STATE_FILE="/tmp/omniwm_bar_state"   # 1=Visible, 0=Hidden
 LOCK_FILE="/tmp/omniwm_bar_hold.lock" # Present while holding
 
-[ ! -f "$STATE_FILE" ] && echo "0" > "$STATE_FILE"
+CTL_BIN="/Applications/OmniWM.app/Contents/MacOS/omniwmctl"
 
-is_visible() { [ "$(cat "$STATE_FILE")" == "1" ]; }
+show_bar() {
+    $CTL_BIN command show-workspace-bar
+}
 
-send_toggle() {
-    /Applications/OmniWM.app/Contents/MacOS/omniwmctl command toggle-workspace-bar
+hide_bar() {
+    $CTL_BIN command hide-workspace-bar
 }
 
 case "$1" in
     --hold)
         touch "$LOCK_FILE"
-        if ! is_visible; then
-            send_toggle
-            echo "1" > "$STATE_FILE"
-        fi
+        show_bar
         ;;
     --release)
         rm -f "$LOCK_FILE"
@@ -29,19 +27,16 @@ case "$1" in
         (
             sleep 5
             # ONLY hide if NOT holding again (lock file removed) 
-            # and it's still visible
-            if [ ! -f "$LOCK_FILE" ] && is_visible; then
-                send_toggle
-                echo "0" > "$STATE_FILE"
+            if [ ! -f "$LOCK_FILE" ]; then
+                hide_bar
             fi
         ) &
         ;;
     --toggle)
-        send_toggle
-        if is_visible; then echo "0" > "$STATE_FILE"; else echo "1" > "$STATE_FILE"; fi
+        $CTL_BIN command toggle-workspace-bar
         ;;
     --reset)
-        echo "0" > "$STATE_FILE"
         rm -f "$LOCK_FILE"
+        hide_bar
         ;;
 esac

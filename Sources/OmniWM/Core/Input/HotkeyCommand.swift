@@ -61,6 +61,8 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case openMenuAnywhere
 
     case toggleWorkspaceBarVisibility
+    case showWorkspaceBar
+    case hideWorkspaceBar
     case toggleHiddenBar
     case toggleQuakeTerminal
     case toggleWorkspaceLayout

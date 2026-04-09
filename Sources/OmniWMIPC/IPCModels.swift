@@ -259,6 +259,8 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case toggleOverview = "toggle-overview"
     case toggleQuakeTerminal = "toggle-quake-terminal"
     case toggleWorkspaceBar = "toggle-workspace-bar"
+    case showWorkspaceBar = "show-workspace-bar"
+    case hideWorkspaceBar = "hide-workspace-bar"
     case toggleHiddenBar = "toggle-hidden-bar"
     case toggleFocusedWindowFloating = "toggle-focused-window-floating"
     case scratchpadAssign = "scratchpad-assign"
@@ -325,6 +327,8 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case toggleOverview
     case toggleQuakeTerminal
     case toggleWorkspaceBar
+    case showWorkspaceBar
+    case hideWorkspaceBar
     case toggleHiddenBar
     case toggleFocusedWindowFloating
     case scratchpadAssign
@@ -425,6 +429,10 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .toggleQuakeTerminal
         case .toggleWorkspaceBar:
             .toggleWorkspaceBar
+        case .showWorkspaceBar:
+            .showWorkspaceBar
+        case .hideWorkspaceBar:
+            .hideWorkspaceBar
         case .toggleHiddenBar:
             .toggleHiddenBar
         case .toggleFocusedWindowFloating:
@@ -617,6 +625,12 @@ public enum IPCCommandRequest: Equatable, Sendable {
         case .toggleWorkspaceBar:
             try requireNoArguments()
             self = .toggleWorkspaceBar
+        case .showWorkspaceBar:
+            try requireNoArguments()
+            self = .showWorkspaceBar
+        case .hideWorkspaceBar:
+            try requireNoArguments()
+            self = .hideWorkspaceBar
         case .toggleHiddenBar:
             try requireNoArguments()
             self = .toggleHiddenBar
@@ -778,6 +792,10 @@ extension IPCCommandRequest: Codable {
             self = .toggleQuakeTerminal
         case .toggleWorkspaceBar:
             self = .toggleWorkspaceBar
+        case .showWorkspaceBar:
+            self = .showWorkspaceBar
+        case .hideWorkspaceBar:
+            self = .hideWorkspaceBar
         case .toggleHiddenBar:
             self = .toggleHiddenBar
         case .toggleFocusedWindowFloating:

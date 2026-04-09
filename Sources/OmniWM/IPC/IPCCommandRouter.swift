@@ -131,6 +131,10 @@ final class IPCCommandRouter {
             return controller.commandHandler.performCommand(.toggleQuakeTerminal)
         case .toggleWorkspaceBar:
             return controller.commandHandler.performCommand(.toggleWorkspaceBarVisibility)
+        case .showWorkspaceBar:
+            return controller.commandHandler.performCommand(.showWorkspaceBar)
+        case .hideWorkspaceBar:
+            return controller.commandHandler.performCommand(.hideWorkspaceBar)
         case .toggleHiddenBar:
             return controller.commandHandler.performCommand(.toggleHiddenBar)
         case .toggleFocusedWindowFloating:

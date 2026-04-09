@@ -133,6 +133,10 @@ final class CommandHandler {
             controller.openMenuAnywhere()
         case .toggleWorkspaceBarVisibility:
             controller.toggleWorkspaceBarVisibility()
+        case .showWorkspaceBar:
+            controller.showWorkspaceBar()
+        case .hideWorkspaceBar:
+            controller.hideWorkspaceBar()
             let isHidden = WMController.shared.hiddenWorkspaceBarMonitorIds.contains(WMController.shared.monitorForInteraction()?.id ?? UUID())
             HUDController.shared.showNotification(
                 title: "HUD CONTROLLER",

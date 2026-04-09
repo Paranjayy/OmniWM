@@ -391,6 +391,38 @@ final class WMController {
         return true
     }
 
+    @discardableResult
+    func showWorkspaceBar() -> Bool {
+        pruneHiddenWorkspaceBarMonitorIds()
+        guard let monitor = monitorForInteraction() else { return false }
+        let resolved = settings.resolvedBarSettings(for: monitor)
+        guard resolved.enabled else { return false }
+
+        guard hiddenWorkspaceBarMonitorIds.contains(monitor.id) else { return true }
+        hiddenWorkspaceBarMonitorIds.remove(monitor.id)
+
+        cancelPendingWorkspaceBarRefresh()
+        workspaceBarManager.setup(controller: self, settings: settings)
+        layoutRefreshController.requestRelayout(reason: .monitorSettingsChanged)
+        return true
+    }
+
+    @discardableResult
+    func hideWorkspaceBar() -> Bool {
+        pruneHiddenWorkspaceBarMonitorIds()
+        guard let monitor = monitorForInteraction() else { return false }
+        let resolved = settings.resolvedBarSettings(for: monitor)
+        guard resolved.enabled else { return false }
+
+        guard !hiddenWorkspaceBarMonitorIds.contains(monitor.id) else { return true }
+        hiddenWorkspaceBarMonitorIds.insert(monitor.id)
+
+        cancelPendingWorkspaceBarRefresh()
+        workspaceBarManager.setup(controller: self, settings: settings)
+        layoutRefreshController.requestRelayout(reason: .monitorSettingsChanged)
+        return true
+    }
+
     func setQuakeTerminalEnabled(_ enabled: Bool) {
         // quakeTerminalController.setup()
     }

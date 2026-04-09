@@ -442,6 +442,8 @@ public enum IPCAutomationManifest {
         command(["scratchpad", "toggle"], name: .scratchpadToggle, summary: "Show or hide the scratchpad window."),
         command(["open-menu-anywhere"], name: .openMenuAnywhere, summary: "Open the menu surface anywhere."),
         command(["toggle-workspace-bar"], name: .toggleWorkspaceBar, summary: "Toggle runtime workspace bar visibility."),
+        command(["show-workspace-bar"], name: .showWorkspaceBar, summary: "Explicitly show the runtime workspace bar."),
+        command(["hide-workspace-bar"], name: .hideWorkspaceBar, summary: "Explicitly hide the runtime workspace bar."),
         command(["toggle-hidden-bar"], name: .toggleHiddenBar, summary: "Toggle the hidden bar surface."),
         command(["toggle-quake-terminal"], name: .toggleQuakeTerminal, summary: "Toggle the configured Quake terminal."),
         command(["toggle-workspace-layout"], name: .toggleWorkspaceLayout, summary: "Toggle the current workspace between Niri and Dwindle."),

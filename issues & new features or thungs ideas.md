@@ -145,3 +145,4 @@ james clear
 - **Enhancement**: Bar Visibility lifecycle. When pressing `RCmd / ROpt`, the workspace bar should remain visible while performing actions (e.g., fast workflow state changes), and then auto-hide 5 seconds after releasing the modifiers. (Currently `bar_manager.sh` attempts this but might need refinement for reliability and uninterrupted workflow integration).
 
 - more dwinddle config 
+- we can have waybar like shit for our mac if we want to idk and integrate it workspace bar or somethin just a thought also waybar like thing btt got recently btw
