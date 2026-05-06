@@ -4,37 +4,110 @@ import { useState } from "react";
 
 const CTL_BIN = "/Applications/OmniWM.app/Contents/MacOS/omniwmctl";
 
-interface CommandDescriptor {
-  name: string;
-  summary: string;
-  args?: { name: string; placeholder: string }[];
-}
-
-const COMMANDS: CommandDescriptor[] = [
-  { name: "ping", summary: "Check IPC connection" },
-  { name: "toggle-workspace-bar", summary: "Toggle the workspace bar" },
-  { name: "focus", summary: "Focus a window in a direction", args: [{ name: "direction", placeholder: "left|right|up|down" }] },
-  { name: "move", summary: "Move a window in a direction", args: [{ name: "direction", placeholder: "left|right|up|down" }] },
-  { name: "switch-workspace", summary: "Switch to a workspace", args: [{ name: "name", placeholder: "workspace name" }] },
-  { name: "move-to-workspace", summary: "Move window to a workspace", args: [{ name: "name", placeholder: "workspace name" }] },
-  { name: "resize", summary: "Resize focused window", args: [{ name: "operation", placeholder: "grow|shrink" }, { name: "direction", placeholder: "left|right|up|down" }] },
+const DIRECTIONS = [
+  { title: "Left", value: "left", icon: Icon.ArrowLeft },
+  { title: "Right", value: "right", icon: Icon.ArrowRight },
+  { title: "Up", value: "up", icon: Icon.ArrowUp },
+  { title: "Down", value: "down", icon: Icon.ArrowDown },
 ];
 
 export default function Command() {
   return (
     <List searchBarPlaceholder="Search native OmniWM commands...">
-      {COMMANDS.map((cmd) => (
+      <List.Section title="Navigation">
+        <CommandItem 
+          name="focus" 
+          title="Focus Window" 
+          summary="Focus a neighboring window" 
+          icon={Icon.Eye}
+          hasDirections 
+        />
+        <CommandItem 
+          name="move" 
+          title="Move Window" 
+          summary="Swap window in a direction" 
+          icon={Icon.ArrowsUpLeftDownRight}
+          hasDirections 
+        />
+        <CommandItem 
+          name="move-column" 
+          title="Move Column" 
+          summary="Move the entire column (Niri)" 
+          icon={Icon.ChevronUp}
+          hasDirections 
+        />
+      </List.Section>
+      
+      <List.Section title="System">
         <List.Item
-          key={cmd.name}
-          title={cmd.name}
-          subtitle={cmd.summary}
+          title="Toggle Workspace Bar"
+          subtitle="Toggle visibility of the bar"
+          icon={Icon.Sidebar}
           actions={
             <ActionPanel>
-              {cmd.args ? (
-                <Action.Push title="Configure & Run" target={<CommandForm command={cmd} />} />
-              ) : (
-                <Action title="Run Command" onAction={() => runOmniCommand(cmd.name)} />
-              )}
+              <Action title="Run Command" onAction={() => runOmniCommand("toggle-workspace-bar")} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Capture Layout Snapshot"
+          subtitle="Save current workspace layout"
+          icon={Icon.Camera}
+          actions={
+            <ActionPanel>
+              <Action title="Run Command" onAction={() => runOmniCommand("capture-workspace-snapshot")} />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+    </List>
+  );
+}
+
+function CommandItem({ name, title, summary, icon, hasDirections }: { 
+  name: string; 
+  title: string; 
+  summary: string; 
+  icon: Icon;
+  hasDirections?: boolean 
+}) {
+  return (
+    <List.Item
+      title={title}
+      subtitle={summary}
+      icon={icon}
+      actions={
+        <ActionPanel>
+          {hasDirections ? (
+            <Action.Push title="Choose Direction" target={<DirectionPicker name={name} title={title} />} />
+          ) : (
+            <Action title="Run Command" onAction={() => runOmniCommand(name)} />
+          )}
+        </ActionPanel>
+      }
+    />
+  );
+}
+
+function DirectionPicker({ name, title }: { name: string; title: string }) {
+  const { pop } = useNavigation();
+  
+  return (
+    <List title={title} searchBarPlaceholder="Select direction...">
+      {DIRECTIONS.map((dir) => (
+        <List.Item
+          key={dir.value}
+          title={dir.title}
+          icon={dir.icon}
+          actions={
+            <ActionPanel>
+              <Action 
+                title={`Confirm ${dir.title}`} 
+                onAction={() => {
+                  runOmniCommand(`${name} ${dir.value}`);
+                  pop();
+                }} 
+              />
             </ActionPanel>
           }
         />
@@ -43,44 +116,14 @@ export default function Command() {
   );
 }
 
-function CommandForm({ command }: { command: CommandDescriptor }) {
-  const { pop } = useNavigation();
-
-  const handleSubmit = (values: Record<string, string>) => {
-    let argString = "";
-    for (const [key, value] of Object.entries(values)) {
-      argString += ` --${key} ${value}`;
-    }
-    runOmniCommand(`${command.name}${argString}`);
-    pop();
-  };
-
-  return (
-    <Form
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm title="Run Command" onSubmit={handleSubmit} />
-        </ActionPanel>
-      }
-    >
-      <Form.Description text={command.summary} />
-      {command.args?.map((arg) => (
-        <Form.TextField key={arg.name} id={arg.name} title={arg.name} placeholder={arg.placeholder} />
-      ))}
-    </Form>
-  );
-}
-
 async function runOmniCommand(cmd: string) {
   try {
-    // Note: split cmd by space to handle arguments properly if needed, 
-    // but for simple 'command <subcommand>' it works.
     execSync(`${CTL_BIN} command ${cmd}`);
-    showToast({ title: "Command executed", message: cmd });
+    showToast({ title: "Executed", message: cmd });
   } catch (error) {
     showToast({
       style: Toast.Style.Failure,
-      title: "Command failed",
+      title: "Failed",
       message: String(error),
     });
   }

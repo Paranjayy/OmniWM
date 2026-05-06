@@ -4,10 +4,15 @@ import { useState, useEffect } from "react";
 
 interface WorkspaceEntry {
   id: string;
-  name: string;
-  displayName?: string;
+  rawName: string;
+  displayName: string;
   monitorId?: string;
-  isActive: boolean;
+  isFocused: boolean;
+  counts?: {
+    total: number;
+    tiled: number;
+    floating: number;
+  };
 }
 
 const CTL_BIN = "/Applications/OmniWM.app/Contents/MacOS/omniwmctl";
@@ -22,24 +27,10 @@ export default function Command() {
 
   const refreshWorkspaces = () => {
     try {
-      // We don't have a direct 'query workspaces' yet in the manifest, 
-      // but we can get them from 'query workspace-bar'
-      const output = execSync(`${CTL_BIN} query workspace-bar --format json`).toString();
+      const output = execSync(`${CTL_BIN} query workspaces --format json`).toString();
       const parsed = JSON.parse(output);
-      if (parsed.result && parsed.result.payload && parsed.result.payload.monitors) {
-        const allWorkspaces: WorkspaceEntry[] = [];
-        parsed.result.payload.monitors.forEach((mon: any) => {
-          mon.workspaces.forEach((ws: any) => {
-            allWorkspaces.push({
-              id: ws.id,
-              name: ws.name,
-              displayName: ws.displayName,
-              monitorId: mon.id,
-              isActive: ws.isActive
-            });
-          });
-        });
-        setWorkspaces(allWorkspaces);
+      if (parsed.result && parsed.result.payload && parsed.result.payload.workspaces) {
+        setWorkspaces(parsed.result.payload.workspaces);
       }
     } catch (error) {
       showToast({
@@ -54,7 +45,7 @@ export default function Command() {
 
   const switchWorkspace = async (name: string) => {
     try {
-      execSync(`${CTL_BIN} command switch-workspace --name ${name}`);
+      execSync(`${CTL_BIN} command switch-workspace ${name}`);
       showToast({ title: `Switched to workspace ${name}` });
     } catch (error) {
       showToast({
@@ -65,24 +56,38 @@ export default function Command() {
     }
   };
 
+  const activeWorkspaces = workspaces.filter(ws => ws.counts && ws.counts.total > 0);
+  const inactiveWorkspaces = workspaces.filter(ws => !ws.counts || ws.counts.total === 0);
+
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search workspaces...">
-      {workspaces.map((ws) => (
-        <List.Item
-          key={ws.id}
-          title={ws.displayName || ws.name}
-          subtitle={`Workspace ${ws.name}`}
-          accessories={[
-            { icon: ws.isActive ? Icon.CheckCircle : undefined },
-          ]}
-          actions={
-            <ActionPanel>
-              <Action title="Switch to Workspace" onAction={() => switchWorkspace(ws.name)} />
-              <Action title="Refresh" onAction={refreshWorkspaces} shortcut={{ modifiers: ["cmd"], key: "r" }} />
-            </ActionPanel>
-          }
-        />
-      ))}
+      <List.Section title="Active Workspaces">
+        {activeWorkspaces.map((ws) => (
+          <WorkspaceItem key={ws.id} ws={ws} onSwitch={switchWorkspace} />
+        ))}
+      </List.Section>
+      <List.Section title="Inactive Workspaces">
+        {inactiveWorkspaces.map((ws) => (
+          <WorkspaceItem key={ws.id} ws={ws} onSwitch={switchWorkspace} />
+        ))}
+      </List.Section>
     </List>
+  );
+}
+
+function WorkspaceItem({ ws, onSwitch }: { ws: WorkspaceEntry; onSwitch: (name: string) => void }) {
+  return (
+    <List.Item
+      title={ws.displayName}
+      subtitle={`Workspace ${ws.rawName} (${ws.counts?.total || 0} windows)`}
+      accessories={[
+        { icon: ws.isFocused ? Icon.CheckCircle : undefined },
+      ]}
+      actions={
+        <ActionPanel>
+          <Action title="Switch to Workspace" onAction={() => onSwitch(ws.rawName)} />
+        </ActionPanel>
+      }
+    />
   );
 }

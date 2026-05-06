@@ -266,6 +266,8 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case scratchpadAssign = "scratchpad-assign"
     case scratchpadToggle = "scratchpad-toggle"
     case openMenuAnywhere = "open-menu-anywhere"
+    case setSetting = "set-setting"
+    case querySetting = "query-setting"
 }
 
 public enum IPCCommandArgumentValue: Equatable, Sendable {
@@ -273,6 +275,7 @@ public enum IPCCommandArgumentValue: Equatable, Sendable {
     case integer(Int)
     case layout(IPCWorkspaceLayout)
     case resizeOperation(IPCResizeOperation)
+    case string(String)
 }
 
 public enum IPCCommandRequestConstructionError: Error, Equatable, Sendable {
@@ -943,6 +946,7 @@ public enum IPCQueryName: String, Codable, CaseIterable, Equatable, Sendable {
     case capabilities
     case focusedWindowDecision = "focused-window-decision"
     case reconcileDebug = "reconcile-debug"
+    case settings
 }
 
 public struct IPCQuerySelectors: Codable, Equatable, Sendable {

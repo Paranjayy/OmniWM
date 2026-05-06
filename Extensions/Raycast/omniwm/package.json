@@ -2,7 +2,7 @@
   "name": "omniwm",
   "title": "OmniWM",
   "description": "Control OmniWM from Raycast",
-  "icon": "command-icon.png",
+  "icon": "assets/icon.png",
   "author": "barutsrb",
   "license": "MIT",
   "commands": [

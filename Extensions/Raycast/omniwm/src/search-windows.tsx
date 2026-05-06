@@ -3,15 +3,21 @@ import { execSync } from "child_process";
 import { useState, useEffect } from "react";
 
 interface WindowEntry {
-  windowId: number;
+  id: string;
   pid: number;
   title: string;
-  bundleId: string;
-  workspaceName: string;
-  workspaceId: string;
+  app: {
+    bundleId: string;
+    name: string;
+  };
+  workspace: {
+    displayName: string;
+    id: string;
+    number: number;
+    rawName: string;
+  };
   isFocused: boolean;
-  isFloating: boolean;
-  frame: { x: number; y: number; width: number; height: number };
+  isVisible: boolean;
 }
 
 const CTL_BIN = "/Applications/OmniWM.app/Contents/MacOS/omniwmctl";
@@ -42,9 +48,9 @@ export default function Command() {
     }
   };
 
-  const focusWindow = async (windowId: number) => {
+  const focusWindow = async (id: string) => {
     try {
-      execSync(`${CTL_BIN} command focus --window-id ${windowId}`);
+      execSync(`${CTL_BIN} window focus ${id}`);
       showToast({ title: "Focused window" });
     } catch (error) {
       showToast({
@@ -59,16 +65,17 @@ export default function Command() {
     <List isLoading={isLoading} searchBarPlaceholder="Search windows by title or app...">
       {windows.map((win) => (
         <List.Item
-          key={`${win.pid}-${win.windowId}`}
+          key={win.id}
+          icon={{ fileIcon: `/Applications/${win.app.name}.app` }}
           title={win.title || "Untitled"}
-          subtitle={win.bundleId}
+          subtitle={win.app.name}
           accessories={[
-            { text: win.workspaceName, icon: Icon.Grid },
+            { text: win.workspace.displayName, icon: Icon.Grid },
             { icon: win.isFocused ? Icon.CheckCircle : undefined },
           ]}
           actions={
             <ActionPanel>
-              <Action title="Focus Window" onAction={() => focusWindow(win.windowId)} />
+              <Action title="Focus Window" onAction={() => focusWindow(win.id)} />
               <Action title="Refresh" onAction={refreshWindows} shortcut={{ modifiers: ["cmd"], key: "r" }} />
             </ActionPanel>
           }
