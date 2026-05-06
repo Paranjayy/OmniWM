@@ -86,6 +86,19 @@ function WorkspaceItem({ ws, onSwitch }: { ws: WorkspaceEntry; onSwitch: (name: 
       actions={
         <ActionPanel>
           <Action title="Switch to Workspace" onAction={() => onSwitch(ws.rawName)} />
+          <Action 
+            title="Capture Layout Snapshot" 
+            icon={Icon.Camera}
+            onAction={async () => {
+              try {
+                execSync(`${CTL_BIN} command capture-workspace-snapshot`);
+                showToast({ title: "Snapshot captured" });
+              } catch (e) {
+                showToast({ style: Toast.Style.Failure, title: "Failed to capture snapshot" });
+              }
+            }} 
+            shortcut={{ modifiers: ["cmd"], key: "s" }}
+          />
         </ActionPanel>
       }
     />

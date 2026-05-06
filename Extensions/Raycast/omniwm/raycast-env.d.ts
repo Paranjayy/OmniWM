@@ -23,6 +23,8 @@ declare namespace Preferences {
   export type SwitchWorkspace = ExtensionPreferences & {}
   /** Preferences accessible in the `toggle-bar` command */
   export type ToggleBar = ExtensionPreferences & {}
+  /** Preferences accessible in the `settings` command */
+  export type Settings = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -36,5 +38,7 @@ declare namespace Arguments {
   export type SwitchWorkspace = {}
   /** Arguments passed to the `toggle-bar` command */
   export type ToggleBar = {}
+  /** Arguments passed to the `settings` command */
+  export type Settings = {}
 }
 

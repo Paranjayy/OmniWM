@@ -37,6 +37,49 @@ export default function Command() {
           hasDirections 
         />
       </List.Section>
+
+      <List.Section title="Layout & Resizing">
+        <List.Item
+          title="Cycle Column Width (Forward)"
+          subtitle="Increase column width"
+          icon={Icon.Maximize}
+          actions={
+            <ActionPanel>
+              <Action title="Run Command" onAction={() => runOmniCommand("cycle-column-width forward")} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Cycle Column Width (Backward)"
+          subtitle="Decrease column width"
+          icon={Icon.Minimize}
+          actions={
+            <ActionPanel>
+              <Action title="Run Command" onAction={() => runOmniCommand("cycle-column-width backward")} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Toggle Full Width"
+          subtitle="Make column take full screen width"
+          icon={Icon.DistributeSpacingHorizontal}
+          actions={
+            <ActionPanel>
+              <Action title="Run Command" onAction={() => runOmniCommand("toggle-column-full-width")} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Balance Sizes"
+          subtitle="Equalize window sizes in layout"
+          icon={Icon.CircleGrid3x3}
+          actions={
+            <ActionPanel>
+              <Action title="Run Command" onAction={() => runOmniCommand("balance-sizes")} />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
       
       <List.Section title="System">
         <List.Item

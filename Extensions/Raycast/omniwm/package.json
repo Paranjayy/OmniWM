@@ -35,6 +35,12 @@
       "title": "Toggle Workspace Bar",
       "description": "Toggle the visibility of the OmniWM bar",
       "mode": "no-view"
+    },
+    {
+      "name": "settings",
+      "title": "Manage Settings",
+      "description": "Configure OmniWM behaviors",
+      "mode": "view"
     }
   ],
   "dependencies": {
