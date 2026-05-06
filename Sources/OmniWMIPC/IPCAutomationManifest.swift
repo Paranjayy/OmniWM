@@ -39,6 +39,7 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
     case columnIndex = "column-index"
     case layout
     case resizeOperation = "resize-operation"
+    case string
 
     public var usagePlaceholder: String {
         switch self {
@@ -50,6 +51,8 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
             "<default|niri|dwindle>"
         case .resizeOperation:
             "<grow|shrink>"
+        case .string:
+            "<text>"
         }
     }
 }
@@ -395,6 +398,10 @@ public enum IPCAutomationManifest {
             name: .reconcileDebug,
             summary: "Return the reconcile snapshot and recent trace for debugging."
         ),
+        IPCQueryDescriptor(
+            name: .settings,
+            summary: "Return the current OmniWM system settings."
+        ),
     ]
 
     public static let commandDescriptors: [IPCCommandDescriptor] = [
@@ -451,6 +458,12 @@ public enum IPCAutomationManifest {
         command(["toggle-fullscreen"], name: .toggleFullscreen, summary: "Toggle OmniWM-managed fullscreen."),
         command(["toggle-native-fullscreen"], name: .toggleNativeFullscreen, summary: "Toggle native macOS fullscreen."),
         command(["toggle-overview"], name: .toggleOverview, summary: "Toggle the overview surface."),
+        command(["set-setting"], name: .setSetting, summary: "Update an OmniWM setting.", arguments: [
+            IPCCommandArgumentDescriptor(kind: .string, summary: "Setting key."),
+            IPCCommandArgumentDescriptor(kind: .string, summary: "New value.")
+        ]),
+        command(["capture-workspace-snapshot"], name: .captureWorkspaceSnapshot, summary: "Capture a workspace layout snapshot."),
+        command(["restore-workspace-snapshot"], name: .restoreWorkspaceSnapshot, summary: "Restore the latest layout snapshot for the current workspace."),
     ]
 
     public static let workspaceActionDescriptors: [IPCWorkspaceActionDescriptor] = [

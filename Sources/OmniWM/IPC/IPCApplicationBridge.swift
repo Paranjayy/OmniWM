@@ -244,6 +244,8 @@ actor IPCApplicationBridge {
                 kind: .query,
                 result: IPCResult(reconcileDebug: queryRouter.reconcileDebugResult())
             )
+        case .settings:
+            return .success(id: id, kind: .query, result: IPCResult(settings: queryRouter.settingsResult()))
         }
     }
 

@@ -145,6 +145,12 @@ final class IPCCommandRouter {
             return toggleScratchpad()
         case .openMenuAnywhere:
             return controller.commandHandler.performCommand(.openMenuAnywhere)
+        case let .setSetting(key, value):
+            return controller.settings.update(key: key, value: value) ? .executed : .notFound
+        case .captureWorkspaceSnapshot:
+            return controller.commandHandler.performCommand(.captureWorkspaceSnapshot)
+        case .restoreWorkspaceSnapshot:
+            return controller.commandHandler.performCommand(.restoreWorkspaceSnapshot)
         }
     }
 

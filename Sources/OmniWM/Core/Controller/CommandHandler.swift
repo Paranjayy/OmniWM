@@ -167,17 +167,33 @@ final class CommandHandler {
         case .captureWorkspaceSnapshot:
             if ExperimentFlags.shared.isGodBuildActive && controller.settings.sessionSnapshotEnabled,
                let activeWs = controller.activeWorkspace() {
-                let windowCount = controller.workspaceWindowCount(for: activeWs.id)
-                let layoutJSON = "{\"workspaceName\":\"\(activeWs.name)\",\"windowCount\":\(windowCount)}"
-                WorkspaceSnapshotManager.shared.capture(
-                    workspaceId: "\(activeWs.id)",
-                    layoutJSON: layoutJSON
-                )
+                let snapshot = controller.workspaceManager.reconcileSnapshot()
+                if let data = try? JSONEncoder().encode(snapshot),
+                   let layoutJSON = String(data: data, encoding: .utf8) {
+                    WorkspaceSnapshotManager.shared.capture(
+                        workspaceId: "\(activeWs.id)",
+                        layoutJSON: layoutJSON
+                    )
+                    HUDController.shared.showNotification(
+                        title: "LAYOUT SNAPSHOT",
+                        icon: "camera.viewfinder",
+                        message: "State cached for \(activeWs.name)",
+                        highlightColor: .orange
+                    )
+                }
+            }
+        case .restoreWorkspaceSnapshot:
+            if ExperimentFlags.shared.isGodBuildActive && controller.settings.sessionSnapshotEnabled,
+               let activeWs = controller.activeWorkspace(),
+               let snapshotRecord = WorkspaceSnapshotManager.shared.latestSnapshot(for: "\(activeWs.id)"),
+               let data = snapshotRecord.layoutData.data(using: .utf8),
+               let snapshot = try? JSONDecoder().decode(ReconcileSnapshot.self, from: data) {
+                controller.workspaceManager.restore(snapshot: snapshot)
                 HUDController.shared.showNotification(
-                    title: "GOD BUILD SNAPSHOT",
-                    icon: "camera.viewfinder",
-                    message: "Layout cached for \(activeWs.name)",
-                    highlightColor: .orange
+                    title: "LAYOUT RESTORED",
+                    icon: "arrow.clockwise.circle",
+                    message: "Restored to \(snapshotRecord.formattedTimestamp)",
+                    highlightColor: .green
                 )
             }
         case .openWarpSwitcher:

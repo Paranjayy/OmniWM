@@ -1,12 +1,12 @@
 import Foundation
 
-enum FocusPolicyLeaseOwner: String, Equatable {
+enum FocusPolicyLeaseOwner: String, Codable, Equatable {
     case nativeMenu = "native_menu"
     case nativeAppSwitch = "native_app_switch"
     case ruleCreatedFloatingWindow = "rule_created_floating_window"
 }
 
-struct FocusPolicyLease: Equatable {
+struct FocusPolicyLease: Codable, Equatable {
     let owner: FocusPolicyLeaseOwner
     let reason: String
     let suppressesFocusFollowsMouse: Bool

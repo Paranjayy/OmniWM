@@ -408,6 +408,29 @@ final class SettingsStore {
         didSet { defaults.set(sessionSnapshotEnabled, forKey: Keys.sessionSnapshotEnabled) }
     }
 
+    func update(key: String, value: String) -> Bool {
+        switch key {
+        case "animationsEnabled":
+            if let b = Bool(value) { animationsEnabled = b; return true }
+        case "workspaceBarEnabled":
+            if let b = Bool(value) { workspaceBarEnabled = b; return true }
+        case "gapSize":
+            if let d = Double(value) { gapSize = d; return true }
+        case "borderWidth":
+            if let d = Double(value) { borderWidth = d; return true }
+        case "bordersEnabled":
+            if let b = Bool(value) { bordersEnabled = b; return true }
+        case "focusFollowsMouse":
+            if let b = Bool(value) { focusFollowsMouse = b; return true }
+        case "appearanceMode":
+            if let mode = AppearanceMode(rawValue: value) { appearanceMode = mode; return true }
+        // Add more as needed, or use reflection
+        default:
+            return false
+        }
+        return false
+    }
+
     func loadPersistedWindowRestoreCatalog() -> PersistedWindowRestoreCatalog {
         guard let data = defaults.data(forKey: Keys.persistedWindowRestoreCatalog),
               let catalog = try? JSONDecoder().decode(PersistedWindowRestoreCatalog.self, from: data)

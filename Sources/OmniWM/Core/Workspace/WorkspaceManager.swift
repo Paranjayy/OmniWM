@@ -188,6 +188,48 @@ final class WorkspaceManager {
         ReconcileDebugDump.trace(reconcileTrace.snapshot(), limit: limit)
     }
 
+    func restore(snapshot: ReconcileSnapshot) {
+        for windowSnapshot in snapshot.windows {
+            guard let entry = windows.entry(for: windowSnapshot.token) else { continue }
+            
+            // Restore mode and desired state
+            windows.setMode(windowSnapshot.mode, for: windowSnapshot.token)
+            windows.setDesiredState(windowSnapshot.desiredState, for: windowSnapshot.token)
+            
+            if let restoreIntent = windowSnapshot.restoreIntent {
+                windows.setRestoreIntent(restoreIntent, for: windowSnapshot.token)
+            }
+            
+            // If it was floating, restore the floating frame
+            if windowSnapshot.mode == .floating, let floatingFrame = windowSnapshot.desiredState.floatingFrame {
+                let referenceMonitor = monitor(byId: windowSnapshot.desiredState.monitorId ?? monitors[0].id)
+                let referenceVisibleFrame = referenceMonitor?.visibleFrame ?? floatingFrame
+                let normalizedOrigin = normalizedFloatingOrigin(
+                    for: floatingFrame,
+                    in: referenceVisibleFrame
+                )
+                windows.setFloatingState(
+                    .init(
+                        lastFrame: floatingFrame,
+                        normalizedOrigin: normalizedOrigin,
+                        referenceMonitorId: referenceMonitor?.id,
+                        restoreToFloating: true
+                    ),
+                    for: windowSnapshot.token
+                )
+            }
+        }
+        
+        // Restore focus if possible
+        if let focusedToken = snapshot.focusSession.focusedToken, windows.entry(for: focusedToken) != nil {
+            _ = setManagedFocus(focusedToken, in: snapshot.focusSession.pendingManagedFocus.workspaceId ?? snapshot.windows[0].workspaceId)
+        }
+        
+        reconcileInteractionMonitorState(notify: true)
+        schedulePersistedWindowRestoreCatalogSave()
+        HapticManager.shared.trigger(.alignment)
+    }
+
     @discardableResult
     func recordReconcileEvent(_ event: WMEvent) -> ReconcileTxn {
         let snapshot = reconcileSnapshot()

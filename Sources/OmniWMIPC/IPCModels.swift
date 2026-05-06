@@ -257,6 +257,9 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case toggleFullscreen = "toggle-fullscreen"
     case toggleNativeFullscreen = "toggle-native-fullscreen"
     case toggleOverview = "toggle-overview"
+    case setSetting = "set-setting"
+    case captureWorkspaceSnapshot = "capture-workspace-snapshot"
+    case restoreWorkspaceSnapshot = "restore-workspace-snapshot"
     case toggleQuakeTerminal = "toggle-quake-terminal"
     case toggleWorkspaceBar = "toggle-workspace-bar"
     case showWorkspaceBar = "show-workspace-bar"
@@ -266,7 +269,6 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case scratchpadAssign = "scratchpad-assign"
     case scratchpadToggle = "scratchpad-toggle"
     case openMenuAnywhere = "open-menu-anywhere"
-    case setSetting = "set-setting"
     case querySetting = "query-setting"
 }
 
@@ -328,6 +330,8 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case toggleFullscreen
     case toggleNativeFullscreen
     case toggleOverview
+    case setSetting(key: String, value: String)
+    case captureWorkspaceSnapshot
     case toggleQuakeTerminal
     case toggleWorkspaceBar
     case showWorkspaceBar
@@ -428,6 +432,10 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .toggleNativeFullscreen
         case .toggleOverview:
             .toggleOverview
+        case .setSetting:
+            .setSetting
+        case .captureWorkspaceSnapshot:
+            .captureWorkspaceSnapshot
         case .toggleQuakeTerminal:
             .toggleQuakeTerminal
         case .toggleWorkspaceBar:
@@ -1596,6 +1604,7 @@ public enum IPCResultKind: String, Codable, Equatable, Sendable {
     case focusedWindowDecision = "focused-window-decision"
     case reconcileDebug = "reconcile-debug"
     case subscribed
+    case settings
 }
 
 public struct IPCPingResult: Codable, Equatable, Sendable {
@@ -2226,6 +2235,7 @@ public struct IPCResult: Codable, Equatable, Sendable {
         case focusedWindowDecision(IPCFocusedWindowDecisionQueryResult)
         case reconcileDebug(IPCReconcileDebugQueryResult)
         case subscribed(IPCSubscribeResult)
+        case settings(IPCSettingsQueryResult)
     }
 
     public let kind: IPCResultKind
@@ -2250,6 +2260,10 @@ public struct IPCResult: Codable, Equatable, Sendable {
 
     public init(activeWorkspace: IPCActiveWorkspaceQueryResult) {
         self.init(kind: .activeWorkspace, payload: .activeWorkspace(activeWorkspace))
+    }
+
+    public init(settings: IPCSettingsQueryResult) {
+        self.init(kind: .settings, payload: .settings(settings))
     }
 
     public init(focusedMonitor: IPCFocusedMonitorQueryResult) {
@@ -2646,5 +2660,33 @@ public enum IPCWindowOpaqueID {
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/") + padding
         return Data(base64Encoded: base64)
+    }
+}
+
+public struct IPCSettingsQueryResult: Codable, Equatable, Sendable {
+    public let animationsEnabled: Bool
+    public let workspaceBarEnabled: Bool
+    public let gapSize: Double
+    public let borderWidth: Double
+    public let bordersEnabled: Bool
+    public let focusFollowsMouse: Bool
+    public let appearanceMode: String
+    
+    public init(
+        animationsEnabled: Bool,
+        workspaceBarEnabled: Bool,
+        gapSize: Double,
+        borderWidth: Double,
+        bordersEnabled: Bool,
+        focusFollowsMouse: Bool,
+        appearanceMode: String
+    ) {
+        self.animationsEnabled = animationsEnabled
+        self.workspaceBarEnabled = workspaceBarEnabled
+        self.gapSize = gapSize
+        self.borderWidth = borderWidth
+        self.bordersEnabled = bordersEnabled
+        self.focusFollowsMouse = focusFollowsMouse
+        self.appearanceMode = appearanceMode
     }
 }

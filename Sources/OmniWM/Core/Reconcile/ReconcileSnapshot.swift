@@ -14,7 +14,7 @@ enum WindowLifecyclePhase: String, Codable, Equatable {
     case destroyed
 }
 
-struct ObservedWindowState: Equatable {
+struct ObservedWindowState: Codable, Equatable {
     var frame: CGRect?
     var workspaceId: WorkspaceDescriptor.ID?
     var monitorId: Monitor.ID?
@@ -39,7 +39,7 @@ struct ObservedWindowState: Equatable {
     }
 }
 
-struct DesiredWindowState: Equatable {
+struct DesiredWindowState: Codable, Equatable {
     var workspaceId: WorkspaceDescriptor.ID?
     var monitorId: Monitor.ID?
     var disposition: TrackedWindowMode?
@@ -97,7 +97,7 @@ struct TopologyProfile: Hashable, Equatable, Codable {
     }
 }
 
-struct RestoreIntent: Equatable {
+struct RestoreIntent: Codable, Equatable {
     let topologyProfile: TopologyProfile
     var workspaceId: WorkspaceDescriptor.ID
     var preferredMonitor: DisplayFingerprint?
@@ -107,8 +107,8 @@ struct RestoreIntent: Equatable {
     var rescueEligible: Bool
 }
 
-struct ReplacementCorrelation: Equatable {
-    enum Reason: String, Equatable {
+struct ReplacementCorrelation: Codable, Equatable {
+    enum Reason: String, Codable, Equatable {
         case managedReplacement
         case nativeFullscreen
         case manualRekey
@@ -120,7 +120,7 @@ struct ReplacementCorrelation: Equatable {
     var recordedAt: Date
 }
 
-struct PendingManagedFocusSnapshot: Equatable {
+struct PendingManagedFocusSnapshot: Codable, Equatable {
     var token: WindowToken?
     var workspaceId: WorkspaceDescriptor.ID?
     var monitorId: Monitor.ID?
@@ -132,7 +132,7 @@ struct PendingManagedFocusSnapshot: Equatable {
     )
 }
 
-struct FocusSessionSnapshot: Equatable {
+struct FocusSessionSnapshot: Codable, Equatable {
     var focusedToken: WindowToken?
     var pendingManagedFocus: PendingManagedFocusSnapshot
     var focusLease: FocusPolicyLease?
@@ -142,7 +142,7 @@ struct FocusSessionSnapshot: Equatable {
     var previousInteractionMonitorId: Monitor.ID?
 }
 
-struct ReconcileWindowSnapshot: Equatable {
+struct ReconcileWindowSnapshot: Codable, Equatable {
     let token: WindowToken
     let workspaceId: WorkspaceDescriptor.ID
     let mode: TrackedWindowMode
@@ -153,7 +153,7 @@ struct ReconcileWindowSnapshot: Equatable {
     let replacementCorrelation: ReplacementCorrelation?
 }
 
-struct ReconcileSnapshot: Equatable {
+struct ReconcileSnapshot: Codable, Equatable {
     let topologyProfile: TopologyProfile
     let focusSession: FocusSessionSnapshot
     let windows: [ReconcileWindowSnapshot]

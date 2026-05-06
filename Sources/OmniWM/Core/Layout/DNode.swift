@@ -2,9 +2,9 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-struct WindowToken: Hashable, Sendable {
-    let pid: pid_t
-    let windowId: Int
+struct WindowToken: Hashable, Sendable, Codable {
+    var pid: pid_t
+    var windowId: Int
 }
 
 final class WindowHandle: Hashable {

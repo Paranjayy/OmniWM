@@ -288,6 +288,18 @@ final class IPCQueryRouter {
         )
     }
 
+    func settingsResult() -> IPCSettingsQueryResult {
+        IPCSettingsQueryResult(
+            animationsEnabled: controller.settings.animationsEnabled,
+            workspaceBarEnabled: controller.settings.workspaceBarEnabled,
+            gapSize: controller.settings.gapSize,
+            borderWidth: controller.settings.borderWidth,
+            bordersEnabled: controller.settings.bordersEnabled,
+            focusFollowsMouse: controller.settings.focusFollowsMouse,
+            appearanceMode: controller.settings.appearanceMode.rawValue
+        )
+    }
+
     private func workspaceBarWorkspace(from item: WorkspaceBarItem) -> IPCWorkspaceBarWorkspace {
         IPCWorkspaceBarWorkspace(
             id: workspaceIdentifier(item.id),
