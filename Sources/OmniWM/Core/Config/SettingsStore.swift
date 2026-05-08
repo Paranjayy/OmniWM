@@ -424,7 +424,103 @@ final class SettingsStore {
             if let b = Bool(value) { focusFollowsMouse = b; return true }
         case "appearanceMode":
             if let mode = AppearanceMode(rawValue: value) { appearanceMode = mode; return true }
-        // Add more as needed, or use reflection
+        case "niriDefaultColumnWidth":
+            if value == "nil" { niriDefaultColumnWidth = nil; return true }
+            if let d = Double(value) { niriDefaultColumnWidth = d; return true }
+        case "niriMaxWindowsPerColumn":
+            if let i = Int(value) { niriMaxWindowsPerColumn = i; return true }
+        case "niriInfiniteLoop":
+            if let b = Bool(value) { niriInfiniteLoop = b; return true }
+        case "dwindleSmartSplit":
+            if let b = Bool(value) { dwindleSmartSplit = b; return true }
+        case "quakeTerminalOpacity":
+            if let d = Double(value) { quakeTerminalOpacity = d; return true }
+        case "warpSwitcherEnabled":
+            if let b = Bool(value) { warpSwitcherEnabled = b; return true }
+        case "hotkeysEnabled":
+            if let b = Bool(value) { hotkeysEnabled = b; return true }
+        case "focusFollowsWindowToMonitor":
+            if let b = Bool(value) { focusFollowsWindowToMonitor = b; return true }
+        case "mouseWarpAxis":
+            if let axis = MouseWarpAxis(rawValue: value) { mouseWarpAxis = axis; return true }
+        case "niriMaxVisibleColumns":
+            if let i = Int(value) { niriMaxVisibleColumns = i; return true }
+        case "dwindleDefaultSplitRatio":
+            if let d = Double(value) { dwindleDefaultSplitRatio = d; return true }
+        case "workspaceBackJumpEnabled":
+            if let b = Bool(value) { workspaceBackJumpEnabled = b; return true }
+        case "preventSleepEnabled":
+            if let b = Bool(value) { preventSleepEnabled = b; return true }
+        case "quakeTerminalEnabled":
+            if let b = Bool(value) { quakeTerminalEnabled = b; return true }
+        case "quakeTerminalAutoHide":
+            if let b = Bool(value) { quakeTerminalAutoHide = b; return true }
+        case "windowTrashEnabled":
+            if let b = Bool(value) { windowTrashEnabled = b; return true }
+        case "sessionSnapshotEnabled":
+            if let b = Bool(value) { sessionSnapshotEnabled = b; return true }
+        case "moveMouseToFocusedWindow":
+            if let b = Bool(value) { moveMouseToFocusedWindow = b; return true }
+        case "mouseWarpMargin":
+            if let i = Int(value) { mouseWarpMargin = i; return true }
+        case "outerGapLeft":
+            if let d = Double(value) { outerGapLeft = d; return true }
+        case "outerGapRight":
+            if let d = Double(value) { outerGapRight = d; return true }
+        case "outerGapTop":
+            if let d = Double(value) { outerGapTop = d; return true }
+        case "outerGapBottom":
+            if let d = Double(value) { outerGapBottom = d; return true }
+        case "niriCenterFocusedColumn":
+            if let mode = CenterFocusedColumn(rawValue: value) { niriCenterFocusedColumn = mode; return true }
+        case "niriAlwaysCenterSingleColumn":
+            if let b = Bool(value) { niriAlwaysCenterSingleColumn = b; return true }
+        case "dwindleSplitWidthMultiplier":
+            if let d = Double(value) { dwindleSplitWidthMultiplier = d; return true }
+        case "workspaceBarShowLabels":
+            if let b = Bool(value) { workspaceBarShowLabels = b; return true }
+        case "workspaceBarShowFloatingWindows":
+            if let b = Bool(value) { workspaceBarShowFloatingWindows = b; return true }
+        case "workspaceBarNotchAware":
+            if let b = Bool(value) { workspaceBarNotchAware = b; return true }
+        case "workspaceBarReserveLayoutSpace":
+            if let b = Bool(value) { workspaceBarReserveLayoutSpace = b; return true }
+        case "workspaceBarDeduplicateAppIcons":
+            if let b = Bool(value) { workspaceBarDeduplicateAppIcons = b; return true }
+        case "workspaceBarHideEmptyWorkspaces":
+            if let b = Bool(value) { workspaceBarHideEmptyWorkspaces = b; return true }
+        case "workspaceBarHeight":
+            if let d = Double(value) { workspaceBarHeight = d; return true }
+        case "workspaceBarBackgroundOpacity":
+            if let d = Double(value) { workspaceBarBackgroundOpacity = d; return true }
+        case "workspaceBarXOffset":
+            if let d = Double(value) { workspaceBarXOffset = d; return true }
+        case "workspaceBarYOffset":
+            if let d = Double(value) { workspaceBarYOffset = d; return true }
+        case "statusBarShowWorkspaceName":
+            if let b = Bool(value) { statusBarShowWorkspaceName = b; return true }
+        case "statusBarShowAppNames":
+            if let b = Bool(value) { statusBarShowAppNames = b; return true }
+        case "statusBarUseWorkspaceId":
+            if let b = Bool(value) { statusBarUseWorkspaceId = b; return true }
+        case "quakeTerminalPosition":
+            if let pos = QuakeTerminalPosition(rawValue: value) { quakeTerminalPosition = pos; return true }
+        case "quakeTerminalWidthPercent":
+            if let d = Double(value) { quakeTerminalWidthPercent = d; return true }
+        case "quakeTerminalHeightPercent":
+            if let d = Double(value) { quakeTerminalHeightPercent = d; return true }
+        case "quakeTerminalAnimationDuration":
+            if let d = Double(value) { quakeTerminalAnimationDuration = d; return true }
+        case "scrollGestureEnabled":
+            if let b = Bool(value) { scrollGestureEnabled = b; return true }
+        case "scrollSensitivity":
+            if let d = Double(value) { scrollSensitivity = d; return true }
+        case "scrollModifierKey":
+            if let key = ScrollModifierKey(rawValue: value) { scrollModifierKey = key; return true }
+        case "gestureFingerCount":
+            if let count = GestureFingerCount(rawValue: value) { gestureFingerCount = count; return true }
+        case "gestureInvertDirection":
+            if let b = Bool(value) { gestureInvertDirection = b; return true }
         default:
             return false
         }
@@ -1115,14 +1211,11 @@ private enum Keys {
     static let quakeTerminalCustomFrameHeight = "settings.quakeTerminal.customFrameHeight"
 
     static let appearanceMode = "settings.appearanceMode"
-<<<<<<< HEAD
     static let sessionSnapshot = "session.windowSnapshot"
     static let activeProfile = "settings.activeProfile"
 
     static let warpSwitcherEnabled = "settings.godBuild.warpSwitcherEnabled"
     static let windowTrashEnabled = "settings.godBuild.windowTrashEnabled"
     static let sessionSnapshotEnabled = "settings.godBuild.sessionSnapshotEnabled"
-=======
     static let persistedWindowRestoreCatalog = "settings.restoreCatalog"
->>>>>>> origin/main
 }

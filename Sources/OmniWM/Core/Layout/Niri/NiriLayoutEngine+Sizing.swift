@@ -271,6 +271,57 @@ extension NiriLayoutEngine {
         )
     }
 
+    func setColumnWidth(
+        _ column: NiriContainer,
+        width: WeightedSize,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) {
+        let previousWidth = cachedWidthForResizeStart(
+            column,
+            in: workspaceId,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+
+        column.isFullWidth = false
+        column.width = width
+        column.presetWidthIdx = nil
+        column.hasManualSingleWindowWidthOverride = true
+
+        let workingAreaWidth = workingFrame.width
+        let targetPixels: CGFloat
+        switch width {
+        case .proportion(let p):
+            targetPixels = (workingAreaWidth - gaps) * p
+        case .fixed(let f):
+            targetPixels = f
+        }
+
+        let didStartWidthAnimation = column.animateWidthTo(
+            newWidth: targetPixels,
+            clock: animationClock,
+            config: windowMovementAnimationConfig,
+            displayRefreshRate: displayRefreshRate,
+            animated: motion.animationsEnabled
+        )
+
+        ensureSelectionVisibleForPendingWidth(
+            column,
+            targetWidth: targetPixels,
+            previousWidth: previousWidth,
+            restorePreviousWidthAfterFit: didStartWidthAnimation,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
     func setWindowHeight(_ window: NiriWindow, height: WeightedSize) {
         window.height = height
     }

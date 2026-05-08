@@ -35,6 +35,7 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case cycleColumnWidthForward
     case cycleColumnWidthBackward
     case toggleColumnFullWidth
+    case setColumnWidth(Double)
 
     case swapWorkspaceWithMonitor(Direction)
 

@@ -241,6 +241,7 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case cycleColumnWidthForward = "cycle-column-width-forward"
     case cycleColumnWidthBackward = "cycle-column-width-backward"
     case toggleColumnFullWidth = "toggle-column-full-width"
+    case setColumnWidth = "set-column-width"
     case swapWorkspaceWithMonitor = "swap-workspace-with-monitor"
     case balanceSizes = "balance-sizes"
     case moveToRoot = "move-to-root"
@@ -269,6 +270,9 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case scratchpadAssign = "scratchpad-assign"
     case scratchpadToggle = "scratchpad-toggle"
     case openMenuAnywhere = "open-menu-anywhere"
+    case trashFocusedWindow = "trash-focused-window"
+    case popLastTrashedWindow = "pop-last-trashed-window"
+    case openWarpSwitcher = "open-warp-switcher"
     case querySetting = "query-setting"
 }
 
@@ -278,6 +282,7 @@ public enum IPCCommandArgumentValue: Equatable, Sendable {
     case layout(IPCWorkspaceLayout)
     case resizeOperation(IPCResizeOperation)
     case string(String)
+    case double(Double)
 }
 
 public enum IPCCommandRequestConstructionError: Error, Equatable, Sendable {
@@ -341,6 +346,12 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case scratchpadAssign
     case scratchpadToggle
     case openMenuAnywhere
+    case setColumnWidth(width: Double)
+    case restoreWorkspaceSnapshot
+    case trashFocusedWindow
+    case popLastTrashedWindow
+    case openWarpSwitcher
+    case querySetting
 
     public var name: IPCCommandName {
         switch self {
@@ -400,6 +411,8 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .cycleColumnWidthBackward
         case .toggleColumnFullWidth:
             .toggleColumnFullWidth
+        case .setColumnWidth:
+            .setColumnWidth
         case .swapWorkspaceWithMonitor:
             .swapWorkspaceWithMonitor
         case .balanceSizes:
@@ -454,6 +467,18 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .scratchpadToggle
         case .openMenuAnywhere:
             .openMenuAnywhere
+        case .setColumnWidth:
+            .setColumnWidth
+        case .restoreWorkspaceSnapshot:
+            .restoreWorkspaceSnapshot
+        case .trashFocusedWindow:
+            .trashFocusedWindow
+        case .popLastTrashedWindow:
+            .popLastTrashedWindow
+        case .openWarpSwitcher:
+            .openWarpSwitcher
+        case .querySetting:
+            .querySetting
         }
     }
 
@@ -483,6 +508,13 @@ public enum IPCCommandRequest: Equatable, Sendable {
                 throw IPCCommandRequestConstructionError.invalidArgumentType
             }
             return layout
+        }
+
+        func requireDouble() throws -> Double {
+            guard argumentValues.count == 1, case let .double(value) = argumentValues[0] else {
+                throw IPCCommandRequestConstructionError.invalidArgumentType
+            }
+            return value
         }
 
         func requireResizeArguments() throws -> (direction: IPCDirection, operation: IPCResizeOperation) {
@@ -657,6 +689,34 @@ public enum IPCCommandRequest: Equatable, Sendable {
         case .openMenuAnywhere:
             try requireNoArguments()
             self = .openMenuAnywhere
+        case .setColumnWidth:
+            self = .setColumnWidth(width: try requireDouble())
+        case .restoreWorkspaceSnapshot:
+            try requireNoArguments()
+            self = .restoreWorkspaceSnapshot
+        case .trashFocusedWindow:
+            try requireNoArguments()
+            self = .trashFocusedWindow
+        case .popLastTrashedWindow:
+            try requireNoArguments()
+            self = .popLastTrashedWindow
+        case .openWarpSwitcher:
+            try requireNoArguments()
+            self = .openWarpSwitcher
+        case .setSetting:
+            guard argumentValues.count == 2,
+                  case let .string(key) = argumentValues[0],
+                  case let .string(value) = argumentValues[1]
+            else {
+                throw IPCCommandRequestConstructionError.invalidArgumentType
+            }
+            self = .setSetting(key: key, value: value)
+        case .captureWorkspaceSnapshot:
+            try requireNoArguments()
+            self = .captureWorkspaceSnapshot
+        case .querySetting:
+            try requireNoArguments()
+            self = .querySetting
         }
     }
 }
@@ -691,6 +751,15 @@ extension IPCCommandRequest: Codable {
     private struct IPCResizeArguments: Codable, Equatable, Sendable {
         let direction: IPCDirection
         let operation: IPCResizeOperation
+    }
+
+    private struct IPCColumnWidthArguments: Codable, Equatable, Sendable {
+        let width: Double
+    }
+
+    private struct IPCSettingArguments: Codable, Equatable, Sendable {
+        let key: String
+        let value: String
     }
 
     public init(from decoder: Decoder) throws {
@@ -817,6 +886,24 @@ extension IPCCommandRequest: Codable {
             self = .scratchpadToggle
         case .openMenuAnywhere:
             self = .openMenuAnywhere
+        case .setColumnWidth:
+            let arguments = try container.decode(IPCColumnWidthArguments.self, forKey: .arguments)
+            self = .setColumnWidth(width: arguments.width)
+        case .restoreWorkspaceSnapshot:
+            self = .restoreWorkspaceSnapshot
+        case .trashFocusedWindow:
+            self = .trashFocusedWindow
+        case .popLastTrashedWindow:
+            self = .popLastTrashedWindow
+        case .openWarpSwitcher:
+            self = .openWarpSwitcher
+        case .captureWorkspaceSnapshot:
+            self = .captureWorkspaceSnapshot
+        case .querySetting:
+            self = .querySetting
+        case .setSetting:
+            let arguments = try container.decode(IPCSettingArguments.self, forKey: .arguments)
+            self = .setSetting(key: arguments.key, value: arguments.value)
         }
     }
 
@@ -857,6 +944,8 @@ extension IPCCommandRequest: Codable {
             break
         case .moveToWorkspaceDown:
             break
+        case let .setColumnWidth(width):
+            try container.encode(IPCColumnWidthArguments(width: width), forKey: .arguments)
         case let .moveToWorkspaceOnMonitor(workspaceNumber, direction):
             try container.encode(
                 IPCWorkspaceOnMonitorArguments(workspaceNumber: workspaceNumber, direction: direction),
@@ -932,6 +1021,24 @@ extension IPCCommandRequest: Codable {
         case .scratchpadToggle:
             break
         case .openMenuAnywhere:
+            break
+        case .restoreWorkspaceSnapshot:
+            break
+        case .trashFocusedWindow:
+            break
+        case .popLastTrashedWindow:
+            break
+        case .showWorkspaceBar:
+            break
+        case .hideWorkspaceBar:
+            break
+        case .captureWorkspaceSnapshot:
+            break
+        case .querySetting:
+            break
+        case let .setSetting(key, value):
+            try container.encode(IPCSettingArguments(key: key, value: value), forKey: .arguments)
+        case .openWarpSwitcher:
             break
         }
     }
@@ -1918,6 +2025,7 @@ public struct IPCWorkspaceQuerySnapshot: Codable, Equatable, Sendable {
     public let isCurrent: Bool?
     public let counts: IPCWorkspaceWindowCounts?
     public let focusedWindowId: String?
+    public let windows: [IPCWorkspaceBarApp]?
 
     public init(
         id: String? = nil,
@@ -1930,7 +2038,8 @@ public struct IPCWorkspaceQuerySnapshot: Codable, Equatable, Sendable {
         isVisible: Bool? = nil,
         isCurrent: Bool? = nil,
         counts: IPCWorkspaceWindowCounts? = nil,
-        focusedWindowId: String? = nil
+        focusedWindowId: String? = nil,
+        windows: [IPCWorkspaceBarApp]? = nil
     ) {
         self.id = id
         self.rawName = rawName
@@ -1943,6 +2052,7 @@ public struct IPCWorkspaceQuerySnapshot: Codable, Equatable, Sendable {
         self.isCurrent = isCurrent
         self.counts = counts
         self.focusedWindowId = focusedWindowId
+        self.windows = windows
     }
 }
 
@@ -2378,6 +2488,8 @@ public struct IPCResult: Codable, Equatable, Sendable {
             )
         case .subscribed:
             payload = .subscribed(try container.decode(IPCSubscribeResult.self, forKey: .payload))
+        case .settings:
+            payload = .settings(try container.decode(IPCSettingsQueryResult.self, forKey: .payload))
         }
     }
 
@@ -2423,6 +2535,8 @@ public struct IPCResult: Codable, Equatable, Sendable {
         case let .reconcileDebug(payload):
             try container.encode(payload, forKey: .payload)
         case let .subscribed(payload):
+            try container.encode(payload, forKey: .payload)
+        case let .settings(payload):
             try container.encode(payload, forKey: .payload)
         }
     }
@@ -2671,7 +2785,57 @@ public struct IPCSettingsQueryResult: Codable, Equatable, Sendable {
     public let bordersEnabled: Bool
     public let focusFollowsMouse: Bool
     public let appearanceMode: String
+    public let niriDefaultColumnWidth: Double?
+    public let niriMaxWindowsPerColumn: Int
+    public let niriInfiniteLoop: Bool
+    public let dwindleSmartSplit: Bool
+    public let quakeTerminalOpacity: Double
+    public let warpSwitcherEnabled: Bool
     
+    // Extended fields
+    public let hotkeysEnabled: Bool
+    public let focusFollowsWindowToMonitor: Bool
+    public let mouseWarpAxis: String
+    public let niriMaxVisibleColumns: Int
+    public let dwindleDefaultSplitRatio: Double
+    public let workspaceBackJumpEnabled: Bool
+    public let preventSleepEnabled: Bool
+    public let quakeTerminalEnabled: Bool
+    public let quakeTerminalAutoHide: Bool
+    public let windowTrashEnabled: Bool
+    public let sessionSnapshotEnabled: Bool
+    public let moveMouseToFocusedWindow: Bool
+    public let mouseWarpMargin: Int
+    public let outerGapLeft: Double
+    public let outerGapRight: Double
+    public let outerGapTop: Double
+    public let outerGapBottom: Double
+    public let niriCenterFocusedColumn: String
+    public let niriAlwaysCenterSingleColumn: Bool
+    public let dwindleSplitWidthMultiplier: Double
+    public let workspaceBarShowLabels: Bool
+    public let workspaceBarShowFloatingWindows: Bool
+    public let workspaceBarNotchAware: Bool
+    public let workspaceBarReserveLayoutSpace: Bool
+    public let workspaceBarDeduplicateAppIcons: Bool
+    public let workspaceBarHideEmptyWorkspaces: Bool
+    public let workspaceBarHeight: Double
+    public let workspaceBarBackgroundOpacity: Double
+    public let workspaceBarXOffset: Double
+    public let workspaceBarYOffset: Double
+    public let statusBarShowWorkspaceName: Bool
+    public let statusBarShowAppNames: Bool
+    public let statusBarUseWorkspaceId: Bool
+    public let quakeTerminalPosition: String
+    public let quakeTerminalWidthPercent: Double
+    public let quakeTerminalHeightPercent: Double
+    public let quakeTerminalAnimationDuration: Double
+    public let scrollGestureEnabled: Bool
+    public let scrollSensitivity: Double
+    public let scrollModifierKey: String
+    public let gestureFingerCount: Int
+    public let gestureInvertDirection: Bool
+
     public init(
         animationsEnabled: Bool,
         workspaceBarEnabled: Bool,
@@ -2679,7 +2843,55 @@ public struct IPCSettingsQueryResult: Codable, Equatable, Sendable {
         borderWidth: Double,
         bordersEnabled: Bool,
         focusFollowsMouse: Bool,
-        appearanceMode: String
+        appearanceMode: String,
+        niriDefaultColumnWidth: Double?,
+        niriMaxWindowsPerColumn: Int,
+        niriInfiniteLoop: Bool,
+        dwindleSmartSplit: Bool,
+        quakeTerminalOpacity: Double,
+        warpSwitcherEnabled: Bool,
+        hotkeysEnabled: Bool,
+        focusFollowsWindowToMonitor: Bool,
+        mouseWarpAxis: String,
+        niriMaxVisibleColumns: Int,
+        dwindleDefaultSplitRatio: Double,
+        workspaceBackJumpEnabled: Bool,
+        preventSleepEnabled: Bool,
+        quakeTerminalEnabled: Bool,
+        quakeTerminalAutoHide: Bool,
+        windowTrashEnabled: Bool,
+        sessionSnapshotEnabled: Bool,
+        moveMouseToFocusedWindow: Bool,
+        mouseWarpMargin: Int,
+        outerGapLeft: Double,
+        outerGapRight: Double,
+        outerGapTop: Double,
+        outerGapBottom: Double,
+        niriCenterFocusedColumn: String,
+        niriAlwaysCenterSingleColumn: Bool,
+        dwindleSplitWidthMultiplier: Double,
+        workspaceBarShowLabels: Bool,
+        workspaceBarShowFloatingWindows: Bool,
+        workspaceBarNotchAware: Bool,
+        workspaceBarReserveLayoutSpace: Bool,
+        workspaceBarDeduplicateAppIcons: Bool,
+        workspaceBarHideEmptyWorkspaces: Bool,
+        workspaceBarHeight: Double,
+        workspaceBarBackgroundOpacity: Double,
+        workspaceBarXOffset: Double,
+        workspaceBarYOffset: Double,
+        statusBarShowWorkspaceName: Bool,
+        statusBarShowAppNames: Bool,
+        statusBarUseWorkspaceId: Bool,
+        quakeTerminalPosition: String,
+        quakeTerminalWidthPercent: Double,
+        quakeTerminalHeightPercent: Double,
+        quakeTerminalAnimationDuration: Double,
+        scrollGestureEnabled: Bool,
+        scrollSensitivity: Double,
+        scrollModifierKey: String,
+        gestureFingerCount: Int,
+        gestureInvertDirection: Bool
     ) {
         self.animationsEnabled = animationsEnabled
         self.workspaceBarEnabled = workspaceBarEnabled
@@ -2688,5 +2900,53 @@ public struct IPCSettingsQueryResult: Codable, Equatable, Sendable {
         self.bordersEnabled = bordersEnabled
         self.focusFollowsMouse = focusFollowsMouse
         self.appearanceMode = appearanceMode
+        self.niriDefaultColumnWidth = niriDefaultColumnWidth
+        self.niriMaxWindowsPerColumn = niriMaxWindowsPerColumn
+        self.niriInfiniteLoop = niriInfiniteLoop
+        self.dwindleSmartSplit = dwindleSmartSplit
+        self.quakeTerminalOpacity = quakeTerminalOpacity
+        self.warpSwitcherEnabled = warpSwitcherEnabled
+        self.hotkeysEnabled = hotkeysEnabled
+        self.focusFollowsWindowToMonitor = focusFollowsWindowToMonitor
+        self.mouseWarpAxis = mouseWarpAxis
+        self.niriMaxVisibleColumns = niriMaxVisibleColumns
+        self.dwindleDefaultSplitRatio = dwindleDefaultSplitRatio
+        self.workspaceBackJumpEnabled = workspaceBackJumpEnabled
+        self.preventSleepEnabled = preventSleepEnabled
+        self.quakeTerminalEnabled = quakeTerminalEnabled
+        self.quakeTerminalAutoHide = quakeTerminalAutoHide
+        self.windowTrashEnabled = windowTrashEnabled
+        self.sessionSnapshotEnabled = sessionSnapshotEnabled
+        self.moveMouseToFocusedWindow = moveMouseToFocusedWindow
+        self.mouseWarpMargin = mouseWarpMargin
+        self.outerGapLeft = outerGapLeft
+        self.outerGapRight = outerGapRight
+        self.outerGapTop = outerGapTop
+        self.outerGapBottom = outerGapBottom
+        self.niriCenterFocusedColumn = niriCenterFocusedColumn
+        self.niriAlwaysCenterSingleColumn = niriAlwaysCenterSingleColumn
+        self.dwindleSplitWidthMultiplier = dwindleSplitWidthMultiplier
+        self.workspaceBarShowLabels = workspaceBarShowLabels
+        self.workspaceBarShowFloatingWindows = workspaceBarShowFloatingWindows
+        self.workspaceBarNotchAware = workspaceBarNotchAware
+        self.workspaceBarReserveLayoutSpace = workspaceBarReserveLayoutSpace
+        self.workspaceBarDeduplicateAppIcons = workspaceBarDeduplicateAppIcons
+        self.workspaceBarHideEmptyWorkspaces = workspaceBarHideEmptyWorkspaces
+        self.workspaceBarHeight = workspaceBarHeight
+        self.workspaceBarBackgroundOpacity = workspaceBarBackgroundOpacity
+        self.workspaceBarXOffset = workspaceBarXOffset
+        self.workspaceBarYOffset = workspaceBarYOffset
+        self.statusBarShowWorkspaceName = statusBarShowWorkspaceName
+        self.statusBarShowAppNames = statusBarShowAppNames
+        self.statusBarUseWorkspaceId = statusBarUseWorkspaceId
+        self.quakeTerminalPosition = quakeTerminalPosition
+        self.quakeTerminalWidthPercent = quakeTerminalWidthPercent
+        self.quakeTerminalHeightPercent = quakeTerminalHeightPercent
+        self.quakeTerminalAnimationDuration = quakeTerminalAnimationDuration
+        self.scrollGestureEnabled = scrollGestureEnabled
+        self.scrollSensitivity = scrollSensitivity
+        self.scrollModifierKey = scrollModifierKey
+        self.gestureFingerCount = gestureFingerCount
+        self.gestureInvertDirection = gestureInvertDirection
     }
 }

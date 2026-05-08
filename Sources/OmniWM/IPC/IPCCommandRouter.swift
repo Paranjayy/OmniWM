@@ -100,6 +100,8 @@ final class IPCCommandRouter {
             return controller.commandHandler.performCommand(.toggleSplit)
         case .swapSplit:
             return controller.commandHandler.performCommand(.swapSplit)
+        case let .setColumnWidth(width):
+            return controller.commandHandler.performCommand(.setColumnWidth(width))
         case let .resize(ipcDirection, operation):
             return controller.commandHandler.performCommand(
                 .resizeInDirection(direction(for: ipcDirection), operation == .grow)
@@ -151,6 +153,12 @@ final class IPCCommandRouter {
             return controller.commandHandler.performCommand(.captureWorkspaceSnapshot)
         case .restoreWorkspaceSnapshot:
             return controller.commandHandler.performCommand(.restoreWorkspaceSnapshot)
+        case .trashFocusedWindow:
+            return controller.commandHandler.performCommand(.trashFocusedWindow)
+        case .popLastTrashedWindow:
+            return controller.commandHandler.performCommand(.popLastTrashedWindow)
+        case .openWarpSwitcher:
+            return controller.commandHandler.performCommand(.openWarpSwitcher)
         }
     }
 

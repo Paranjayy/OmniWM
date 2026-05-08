@@ -201,6 +201,8 @@ enum CLIRenderer {
             return formattedReconcileDebug(payload)
         case let .subscribed(payload):
             return "subscribed: \(payload.channels.map(\.rawValue).joined(separator: ", "))"
+        case .settings:
+            return "settings query successful"
         }
     }
 

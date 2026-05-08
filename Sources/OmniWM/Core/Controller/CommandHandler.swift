@@ -96,6 +96,8 @@ final class CommandHandler {
             controller.workspaceNavigationHandler.swapCurrentWorkspaceWithMonitor(direction: direction)
         case .balanceSizes:
             layoutHandler(as: LayoutSizable.self)?.balanceSizes()
+        case let .setColumnWidth(width):
+            setColumnWidthInNiri(width)
         case .moveToRoot:
             moveToRootInDwindle()
         case .toggleSplit:
@@ -302,6 +304,22 @@ final class CommandHandler {
             if state.viewOffsetPixels.isAnimating {
                 controller.layoutRefreshController.startScrollAnimation(for: wsId)
             }
+        }
+    }
+
+    private func setColumnWidthInNiri(_ width: Double) {
+        guard let controller else { return }
+        controller.niriLayoutHandler.withNiriOperationContext { ctx, state in
+            ctx.engine.setColumnWidth(
+                ctx.windowNode.container,
+                width: .proportion(width),
+                in: ctx.wsId,
+                motion: ctx.motion,
+                state: &state,
+                workingFrame: ctx.workingFrame,
+                gaps: ctx.gaps
+            )
+            return ctx.commitSimple(state: state)
         }
     }
 

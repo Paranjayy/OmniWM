@@ -491,6 +491,16 @@ enum ActionCatalog {
             .scratchpadToggle
         case .openMenuAnywhere:
             .openMenuAnywhere
+        case .trashFocusedWindow:
+            .trashFocusedWindow
+        case .popLastTrashedWindow:
+            .popLastTrashedWindow
+        case .openWarpSwitcher:
+            .openWarpSwitcher
+        case .captureWorkspaceSnapshot:
+            .captureWorkspaceSnapshot
+        case .centerFocusedFloatAtSize, .testHaptic, .showWorkspaceBar, .hideWorkspaceBar:
+            nil
         }
     }
 }

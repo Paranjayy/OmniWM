@@ -40,6 +40,7 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
     case layout
     case resizeOperation = "resize-operation"
     case string
+    case width
 
     public var usagePlaceholder: String {
         switch self {
@@ -53,6 +54,8 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
             "<grow|shrink>"
         case .string:
             "<text>"
+        case .width:
+            "<float>"
         }
     }
 }
@@ -247,6 +250,10 @@ public enum IPCAutomationManifest {
         kind: .resizeOperation,
         summary: "Resize direction mode."
     )
+    private static let widthArgument = IPCCommandArgumentDescriptor(
+        kind: .width,
+        summary: "Proportional width (0.0 to 1.0)."
+    )
 
     private static func command(
         _ commandWords: [String],
@@ -293,6 +300,7 @@ public enum IPCAutomationManifest {
         "is-current",
         "window-counts",
         "focused-window-id",
+        "windows",
     ]
 
     public static let displayFieldCatalog: [String] = [
@@ -462,8 +470,12 @@ public enum IPCAutomationManifest {
             IPCCommandArgumentDescriptor(kind: .string, summary: "Setting key."),
             IPCCommandArgumentDescriptor(kind: .string, summary: "New value.")
         ]),
+        command(["set-column-width"], name: .setColumnWidth, summary: "Set the width of the focused Niri column.", arguments: [widthArgument], layoutCompatibility: .niri),
         command(["capture-workspace-snapshot"], name: .captureWorkspaceSnapshot, summary: "Capture a workspace layout snapshot."),
         command(["restore-workspace-snapshot"], name: .restoreWorkspaceSnapshot, summary: "Restore the latest layout snapshot for the current workspace."),
+        command(["trash-focused-window"], name: .trashFocusedWindow, summary: "Trash the focused managed window."),
+        command(["pop-last-trashed-window"], name: .popLastTrashedWindow, summary: "Restore the last trashed managed window."),
+        command(["open-warp-switcher"], name: .openWarpSwitcher, summary: "Open the Warp Switcher surface."),
     ]
 
     public static let workspaceActionDescriptors: [IPCWorkspaceActionDescriptor] = [

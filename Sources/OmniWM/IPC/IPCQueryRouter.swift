@@ -296,7 +296,55 @@ final class IPCQueryRouter {
             borderWidth: controller.settings.borderWidth,
             bordersEnabled: controller.settings.bordersEnabled,
             focusFollowsMouse: controller.settings.focusFollowsMouse,
-            appearanceMode: controller.settings.appearanceMode.rawValue
+            appearanceMode: controller.settings.appearanceMode.rawValue,
+            niriDefaultColumnWidth: controller.settings.niriDefaultColumnWidth,
+            niriMaxWindowsPerColumn: controller.settings.niriMaxWindowsPerColumn,
+            niriInfiniteLoop: controller.settings.niriInfiniteLoop,
+            dwindleSmartSplit: controller.settings.dwindleSmartSplit,
+            quakeTerminalOpacity: controller.settings.quakeTerminalOpacity,
+            warpSwitcherEnabled: controller.settings.warpSwitcherEnabled,
+            hotkeysEnabled: controller.settings.hotkeysEnabled,
+            focusFollowsWindowToMonitor: controller.settings.focusFollowsWindowToMonitor,
+            mouseWarpAxis: controller.settings.mouseWarpAxis.rawValue,
+            niriMaxVisibleColumns: controller.settings.niriMaxVisibleColumns,
+            dwindleDefaultSplitRatio: controller.settings.dwindleDefaultSplitRatio,
+            workspaceBackJumpEnabled: controller.settings.workspaceBackJumpEnabled,
+            preventSleepEnabled: controller.settings.preventSleepEnabled,
+            quakeTerminalEnabled: controller.settings.quakeTerminalEnabled,
+            quakeTerminalAutoHide: controller.settings.quakeTerminalAutoHide,
+            windowTrashEnabled: controller.settings.windowTrashEnabled,
+            sessionSnapshotEnabled: controller.settings.sessionSnapshotEnabled,
+            moveMouseToFocusedWindow: controller.settings.moveMouseToFocusedWindow,
+            mouseWarpMargin: controller.settings.mouseWarpMargin,
+            outerGapLeft: controller.settings.outerGapLeft,
+            outerGapRight: controller.settings.outerGapRight,
+            outerGapTop: controller.settings.outerGapTop,
+            outerGapBottom: controller.settings.outerGapBottom,
+            niriCenterFocusedColumn: controller.settings.niriCenterFocusedColumn.rawValue,
+            niriAlwaysCenterSingleColumn: controller.settings.niriAlwaysCenterSingleColumn,
+            dwindleSplitWidthMultiplier: controller.settings.dwindleSplitWidthMultiplier,
+            workspaceBarShowLabels: controller.settings.workspaceBarShowLabels,
+            workspaceBarShowFloatingWindows: controller.settings.workspaceBarShowFloatingWindows,
+            workspaceBarNotchAware: controller.settings.workspaceBarNotchAware,
+            workspaceBarReserveLayoutSpace: controller.settings.workspaceBarReserveLayoutSpace,
+            workspaceBarDeduplicateAppIcons: controller.settings.workspaceBarDeduplicateAppIcons,
+            workspaceBarHideEmptyWorkspaces: controller.settings.workspaceBarHideEmptyWorkspaces,
+            workspaceBarHeight: controller.settings.workspaceBarHeight,
+            workspaceBarBackgroundOpacity: controller.settings.workspaceBarBackgroundOpacity,
+            workspaceBarXOffset: controller.settings.workspaceBarXOffset,
+            workspaceBarYOffset: controller.settings.workspaceBarYOffset,
+            statusBarShowWorkspaceName: controller.settings.statusBarShowWorkspaceName,
+            statusBarShowAppNames: controller.settings.statusBarShowAppNames,
+            statusBarUseWorkspaceId: controller.settings.statusBarUseWorkspaceId,
+            quakeTerminalPosition: controller.settings.quakeTerminalPosition.rawValue,
+            quakeTerminalWidthPercent: controller.settings.quakeTerminalWidthPercent,
+            quakeTerminalHeightPercent: controller.settings.quakeTerminalHeightPercent,
+            quakeTerminalAnimationDuration: controller.settings.quakeTerminalAnimationDuration,
+            scrollGestureEnabled: controller.settings.scrollGestureEnabled,
+            scrollSensitivity: controller.settings.scrollSensitivity,
+            scrollModifierKey: controller.settings.scrollModifierKey.rawValue,
+            gestureFingerCount: Int(controller.settings.gestureFingerCount.rawValue) ?? 3,
+            gestureInvertDirection: controller.settings.gestureInvertDirection
         )
     }
 
@@ -395,8 +443,31 @@ final class IPCQueryRouter {
             isVisible: include("is-visible", in: fields) ? visibleWorkspaceIds.contains(descriptor.id) : nil,
             isCurrent: include("is-current", in: fields) ? (currentWorkspaceId == descriptor.id) : nil,
             counts: include("window-counts", in: fields) ? counts : nil,
-            focusedWindowId: include("focused-window-id", in: fields) ? focusedWindowId : nil
+            focusedWindowId: include("focused-window-id", in: fields) ? focusedWindowId : nil,
+            windows: include("windows", in: fields) ? workspaceApps(for: descriptor.id) : nil
         )
+    }
+
+    private func workspaceApps(for workspaceId: WorkspaceDescriptor.ID) -> [IPCWorkspaceBarApp] {
+        let entries = controller.workspaceManager.entries(in: workspaceId)
+        let apps = Dictionary(grouping: entries) { entry in
+            controller.appInfoCache.info(for: entry.pid)?.name ?? "Unknown"
+        }
+        return apps.map { (appName, appEntries) in
+            IPCWorkspaceBarApp(
+                id: "app_\(appName)",
+                appName: appName,
+                isFocused: appEntries.contains { controller.workspaceManager.isFocused($0.token) },
+                windowCount: appEntries.count,
+                allWindows: appEntries.map { entry in
+                    IPCWorkspaceBarWindow(
+                        id: windowIdentifier(entry.token),
+                        title: AXWindowService.titlePreferFast(windowId: UInt32(entry.windowId)) ?? "Untitled",
+                        isFocused: controller.workspaceManager.isFocused(entry.token)
+                    )
+                }
+            )
+        }.sorted { $0.appName < $1.appName }
     }
 
     private func displaySnapshot(

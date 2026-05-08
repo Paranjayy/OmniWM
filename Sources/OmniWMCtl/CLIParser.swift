@@ -692,6 +692,10 @@ enum CLIParser {
             return .layout(try parseWorkspaceLayout(token))
         case .resizeOperation:
             return .resizeOperation(try parseResizeOperation(token))
+        case .string:
+            return .string(token)
+        case .width:
+            return .double(try parsePositiveDouble(token))
         }
     }
 
