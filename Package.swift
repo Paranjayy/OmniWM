@@ -2,8 +2,6 @@
 import Foundation
 import PackageDescription
 
-<<<<<<< HEAD
-=======
 let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 struct BuildMetadata {
     let macOSDeploymentTarget: String
@@ -65,7 +63,6 @@ let zigKernelReleaseLibraryFlags = [
     "-L\(zigKernelSwiftPMLibraryDirectory(for: "release"))"
 ]
 
->>>>>>> origin/main
 let package = Package(
     name: "OmniWM",
     platforms: [
@@ -81,8 +78,6 @@ let package = Package(
         .package(url: "https://github.com/mattt/swift-toml.git", from: "2.0.0")
     ],
     targets: [
-<<<<<<< HEAD
-=======
         .plugin(
             name: "OmniWMKernelsBuildPlugin",
             capability: .buildTool(),
@@ -97,7 +92,6 @@ let package = Package(
             path: "Sources/COmniWMKernels",
             publicHeadersPath: "include"
         ),
->>>>>>> origin/main
         .target(
             name: "OmniWMIPC",
             dependencies: ["COmniWMKernels"],
@@ -114,8 +108,6 @@ let package = Package(
                 .plugin(name: "OmniWMKernelsBuildPlugin")
             ]
         ),
-<<<<<<< HEAD
-=======
         .target(
             name: "OmniWM",
             dependencies: [
@@ -160,7 +152,6 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         ),
->>>>>>> origin/main
         .executableTarget(
             name: "OmniWMCtl",
             dependencies: ["OmniWMIPC"],
@@ -176,8 +167,6 @@ let package = Package(
             plugins: [
                 .plugin(name: "OmniWMKernelsBuildPlugin")
             ]
-<<<<<<< HEAD
-=======
         ),
         .testTarget(
             name: "OmniWMTests",
@@ -197,7 +186,6 @@ let package = Package(
             plugins: [
                 .plugin(name: "OmniWMKernelsBuildPlugin")
             ]
->>>>>>> origin/main
         )
     ]
 )
