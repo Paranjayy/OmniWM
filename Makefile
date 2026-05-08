@@ -1,4 +1,4 @@
-.PHONY: format lint lint-fix kernels-build kernels-test build test verify release-check check
+.PHONY: format lint lint-fix kernels-build kernels-test build test verify release-check check config-backup config-check
 
 SWIFT_WITH_GHOSTTY = LIBRARY_PATH="$$(./Scripts/build-preflight.sh print-ghostty-library-dir)$${LIBRARY_PATH:+:$$LIBRARY_PATH}"
 
@@ -41,3 +41,9 @@ release-check:
 
 check:
 	$(MAKE) verify
+
+config-backup:
+	./Scripts/backup_live_configs.sh
+
+config-check:
+	python3 ./Scripts/verify_config_snapshot.py

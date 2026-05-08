@@ -19,5 +19,6 @@ cp -v "$REPO_CONF/karabiner.json" "$KARABINER_CONF/karabiner.json"
 
 # Sync OmniWM Settings
 cp -v "$REPO_CONF/omniwm/settings.json" "$OMNIWM_CONF/settings.json"
+cp -v "$REPO_CONF/omniwm/settings.toml" "$OMNIWM_CONF/settings.toml"
 
 echo "✅ Configurations deployed successfully! mun!"

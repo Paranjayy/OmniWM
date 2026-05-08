@@ -407,6 +407,8 @@ OmniWM stores its editable config at `~/.config/omniwm/settings.toml`, while pri
 - `updateChecksEnabled` is part of the persisted settings model, so it round-trips through full export, compact backup, and import.
 - Fetched release notes, release URLs, last-check timestamps, and skipped-release state stay out of `settings.toml` and remain local runtime or private `UserDefaults` state only.
 - The persisted window restore catalog also stays in private `UserDefaults`. It stores local restore metadata such as workspace target, preferred monitor, floating geometry, and matching window identity fields so managed floating windows can be restored or rescued across relaunches without being exported to `settings.toml`.
+- `make config-backup` snapshots live `~/.config/omniwm` and `~/.config/karabiner/karabiner.json` into the repo `backups/` folder.
+- `make config-check` verifies the repo snapshot and the live files still agree on the expected TOML schema, workspace count, hotkey count, and Karabiner layer combos.
 
 ## App Rules
 
