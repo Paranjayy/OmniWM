@@ -2,13 +2,6 @@ import CoreGraphics
 import Foundation
 import OmniWMIPC
 
-// MARK: - SettingsExport
-
-enum SettingsExportMode {
-    case full
-    case compact
-}
-
 struct QuakeTerminalFrameExport: Codable, Equatable {
     var x: Double
     var y: Double
@@ -34,8 +27,8 @@ struct QuakeTerminalFrameExport: Codable, Equatable {
     }
 }
 
-struct SettingsExport: Codable {
-    var version: Int = SettingsMigration.currentSettingsEpoch
+struct SettingsExport: Codable, Equatable {
+    var version: Int = SettingsFilePersistence.configVersion
 
     var hotkeysEnabled: Bool
     var focusFollowsMouse: Bool
@@ -84,6 +77,15 @@ struct SettingsExport: Codable {
     var workspaceBarBackgroundOpacity: Double
     var workspaceBarXOffset: Double
     var workspaceBarYOffset: Double
+    var workspaceBarAccentColorRed: Double
+    var workspaceBarAccentColorGreen: Double
+    var workspaceBarAccentColorBlue: Double
+    var workspaceBarAccentColorAlpha: Double
+    var workspaceBarTextColorRed: Double
+    var workspaceBarTextColorGreen: Double
+    var workspaceBarTextColorBlue: Double
+    var workspaceBarTextColorAlpha: Double
+    var workspaceBarLabelFontSize: Double
     var monitorBarSettings: [MonitorBarSettings]
 
     var appRules: [AppRule]
@@ -134,8 +136,6 @@ struct SettingsExport: Codable {
     var sessionSnapshotEnabled: Bool
 }
 
-// MARK: - Defaults & Diffing
-
 extension SettingsExport {
     static func defaults() -> SettingsExport {
         SettingsExport(
@@ -181,6 +181,15 @@ extension SettingsExport {
             workspaceBarBackgroundOpacity: 0.1,
             workspaceBarXOffset: 0.0,
             workspaceBarYOffset: 0.0,
+            workspaceBarAccentColorRed: -1,
+            workspaceBarAccentColorGreen: -1,
+            workspaceBarAccentColorBlue: -1,
+            workspaceBarAccentColorAlpha: 1,
+            workspaceBarTextColorRed: -1,
+            workspaceBarTextColorGreen: -1,
+            workspaceBarTextColorBlue: -1,
+            workspaceBarTextColorAlpha: 1,
+            workspaceBarLabelFontSize: 12,
             monitorBarSettings: [],
             appRules: BuiltInSettingsDefaults.appRules,
             monitorOrientationSettings: [],
@@ -225,6 +234,7 @@ extension SettingsExport {
         )
     }
 
+<<<<<<< HEAD
     static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -675,4 +685,6 @@ extension SettingsStore {
         guard matches.count == 1 else { return nil }
         return matches[0].displayId
     }
+=======
+>>>>>>> origin/main
 }

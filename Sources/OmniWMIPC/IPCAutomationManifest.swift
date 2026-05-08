@@ -230,6 +230,7 @@ public struct IPCSubscriptionDescriptor: Codable, Equatable, Sendable {
 }
 
 public enum IPCAutomationManifest {
+<<<<<<< HEAD
     private static let directionArgument = IPCCommandArgumentDescriptor(
         kind: .direction,
         summary: "Direction argument."
@@ -269,25 +270,23 @@ public enum IPCAutomationManifest {
             arguments: arguments,
             layoutCompatibility: layoutCompatibility
         )
+=======
+    private struct Payload: Codable {
+        let windowFieldCatalog: [String]
+        let workspaceFieldCatalog: [String]
+        let displayFieldCatalog: [String]
+        let queryDescriptors: [IPCQueryDescriptor]
+        let commandDescriptors: [IPCCommandDescriptor]
+        let workspaceActionDescriptors: [IPCWorkspaceActionDescriptor]
+        let windowActionDescriptors: [IPCWindowActionDescriptor]
+        let ruleActionDescriptors: [IPCRuleActionDescriptor]
+        let subscriptionDescriptors: [IPCSubscriptionDescriptor]
+>>>>>>> origin/main
     }
 
-    public static let windowFieldCatalog: [String] = [
-        "id",
-        "pid",
-        "workspace",
-        "display",
-        "app",
-        "title",
-        "frame",
-        "mode",
-        "layout-reason",
-        "manual-override",
-        "is-focused",
-        "is-visible",
-        "is-scratchpad",
-        "hidden-reason",
-    ]
+    private static let payload: Payload = loadPayload()
 
+<<<<<<< HEAD
     public static let workspaceFieldCatalog: [String] = [
         "id",
         "raw-name",
@@ -592,6 +591,25 @@ public enum IPCAutomationManifest {
             resultKind: .workspaces
         ),
     ]
+=======
+    public static var windowFieldCatalog: [String] { payload.windowFieldCatalog }
+    public static var workspaceFieldCatalog: [String] { payload.workspaceFieldCatalog }
+    public static var displayFieldCatalog: [String] { payload.displayFieldCatalog }
+    public static var queryDescriptors: [IPCQueryDescriptor] { payload.queryDescriptors }
+    public static var commandDescriptors: [IPCCommandDescriptor] { payload.commandDescriptors }
+    public static var workspaceActionDescriptors: [IPCWorkspaceActionDescriptor] {
+        payload.workspaceActionDescriptors
+    }
+    public static var windowActionDescriptors: [IPCWindowActionDescriptor] {
+        payload.windowActionDescriptors
+    }
+    public static var ruleActionDescriptors: [IPCRuleActionDescriptor] {
+        payload.ruleActionDescriptors
+    }
+    public static var subscriptionDescriptors: [IPCSubscriptionDescriptor] {
+        payload.subscriptionDescriptors
+    }
+>>>>>>> origin/main
 
     public static func queryDescriptor(for name: IPCQueryName) -> IPCQueryDescriptor? {
         queryDescriptors.first { $0.name == name }
@@ -636,5 +654,19 @@ public enum IPCAutomationManifest {
         let channels = request.allChannels ? IPCSubscriptionChannel.allCases : request.channels
         var seen: Set<IPCSubscriptionChannel> = []
         return channels.filter { seen.insert($0).inserted }
+    }
+
+    private static func loadPayload() -> Payload {
+        guard let json = ZigIPCSupport.automationManifestJSON(),
+              let data = json.data(using: .utf8)
+        else {
+            preconditionFailure("Failed to load IPC automation manifest JSON from Zig")
+        }
+
+        do {
+            return try IPCWire.makeDecoder().decode(Payload.self, from: data)
+        } catch {
+            preconditionFailure("Failed to decode IPC automation manifest JSON: \(error)")
+        }
     }
 }

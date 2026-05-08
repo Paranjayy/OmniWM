@@ -3,6 +3,12 @@ import Observation
 
 @MainActor @Observable
 final class AppBootstrapState {
+    var runtime: WMRuntime? {
+        didSet {
+            settings = runtime?.settings
+            controller = runtime?.controller
+        }
+    }
     var settings: SettingsStore?
     var controller: WMController?
     var updateCoordinator: (any AppUpdateCoordinating)?
@@ -13,17 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     nonisolated(unsafe) static weak var sharedBootstrap: AppBootstrapState?
     static var ipcServerFactoryForTests: ((WMController) -> IPCServerLifecycle)?
     static var updateCoordinatorFactoryForTests:
-        ((SettingsStore, WMController, UserDefaults) -> any AppUpdateCoordinating)?
+        ((SettingsStore, WMController, RuntimeStateStore) -> any AppUpdateCoordinating)?
     private static let desktopAndDockSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.Desktop-Settings.extension"
     )!
     private static let systemSettingsAppURL = URL(fileURLWithPath: "/System/Applications/System Settings.app")
-
-    private enum StartupModalAction {
-        case exportBackup
-        case reset
-        case quit
-    }
 
     private enum SeparateSpacesModalAction {
         case openSystemSettings
@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var ipcServer: IPCServerLifecycle?
     private var cliManager: AppCLIManager?
     private var updateCoordinator: (any AppUpdateCoordinating)?
+    private var runtimeStateStore: RuntimeStateStore?
+    private var runtime: WMRuntime?
 
     func applicationDidFinishLaunching(_: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -41,50 +43,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
-        AppDelegate.sharedBootstrap?.controller?.workspaceManager.flushPersistedWindowRestoreCatalogNow()
+        runtime?.flushState()
+        runtimeStateStore?.flushNow()
         stopIPCServer()
     }
 
     func bootstrapApplication(
-        defaults: UserDefaults = .standard,
+        configurationDirectory: URL = SettingsFilePersistence.defaultDirectoryURL,
         spacesRequirement: DisplaysHaveSeparateSpacesRequirement = .init()
     ) {
-        switch AppBootstrapPlanner.decision(appDefaults: defaults, spacesRequirement: spacesRequirement) {
+        switch AppBootstrapPlanner.decision(spacesRequirement: spacesRequirement) {
         case .boot:
-            finishBootstrap(defaults: defaults)
-        case let .requireSettingsReset(storedEpoch):
-            runStartupResetGate(storedEpoch: storedEpoch, defaults: defaults)
+            finishBootstrap(configurationDirectory: configurationDirectory)
         case .requireDisplaysHaveSeparateSpacesDisabled:
             runDisplaysHaveSeparateSpacesGate()
         }
     }
 
-    func finishBootstrap(defaults: UserDefaults) {
-        SettingsMigration.persistCurrentEpoch(defaults: defaults)
+    func finishBootstrap(
+        configurationDirectory: URL = SettingsFilePersistence.defaultDirectoryURL
+    ) {
+        // During active schema churn, boot only from the canonical config files.
+        let persistence = SettingsFilePersistence(directory: configurationDirectory)
+        let runtimeState = RuntimeStateStore(directory: configurationDirectory)
+        runtimeStateStore = runtimeState
 
-        let settings = SettingsStore(defaults: defaults)
-        let hiddenBarController = HiddenBarController(settings: settings)
-        let controller = WMController(settings: settings, hiddenBarController: hiddenBarController)
-        controller.applyPersistedSettings(settings)
+        let settings = SettingsStore(
+            persistence: persistence,
+            runtimeState: runtimeState
+        )
+        let runtime = WMRuntime(settings: settings)
+        runtime.start()
+        let controller = runtime.controller
         let cliManager = AppCLIManager()
-        let updateCoordinator = Self.updateCoordinatorFactoryForTests?(settings, controller, defaults)
-            ?? UpdateCoordinator(settings: settings, defaults: defaults)
+        let updateCoordinator = Self.updateCoordinatorFactoryForTests?(settings, controller, runtimeState)
+            ?? UpdateCoordinator(settings: settings, runtimeState: runtimeState)
         self.cliManager = cliManager
         self.updateCoordinator = updateCoordinator
+        self.runtime = runtime
 
-        AppDelegate.sharedBootstrap?.settings = settings
-        AppDelegate.sharedBootstrap?.controller = controller
+        AppDelegate.sharedBootstrap?.runtime = runtime
         AppDelegate.sharedBootstrap?.updateCoordinator = updateCoordinator
 
         statusBarController = StatusBarController(
             settings: settings,
             controller: controller,
-            hiddenBarController: hiddenBarController,
-            defaults: defaults,
+            hiddenBarController: runtime.hiddenBarController,
             cliManager: cliManager,
             updateCoordinator: updateCoordinator
         )
         controller.statusBarController = statusBarController
+        settings.onExternalSettingsReloaded = { [weak self, weak runtime] in
+            guard let runtime else { return }
+            runtime.applyCurrentConfiguration()
+            self?.statusBarController?.refreshMenu()
+        }
         settings.onIPCEnabledChanged = { [weak self, weak controller] isEnabled in
             guard let self, let controller else { return }
             do {
@@ -135,33 +148,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ipcServer = nil
     }
 
-    private func runStartupResetGate(storedEpoch: Int?, defaults: UserDefaults) {
-        while true {
-            switch presentStartupResetModal(storedEpoch: storedEpoch) {
-            case .exportBackup:
-                do {
-                    let backupURL = try SettingsMigration.exportRawBackup(defaults: defaults)
-                    presentInfoAlert(
-                        title: "Backup Saved",
-                        message: backupURL.path
-                    )
-                } catch {
-                    presentInfoAlert(
-                        title: "Backup Failed",
-                        message: error.localizedDescription
-                    )
-                }
-            case .reset:
-                SettingsMigration.resetOwnedSettings(defaults: defaults)
-                finishBootstrap(defaults: defaults)
-                return
-            case .quit:
-                NSApplication.shared.terminate(nil)
-                return
-            }
-        }
-    }
-
     private func runDisplaysHaveSeparateSpacesGate() {
         switch presentDisplaysHaveSeparateSpacesModal() {
         case .openSystemSettings:
@@ -169,36 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApplication.shared.terminate(nil)
         case .quit:
             NSApplication.shared.terminate(nil)
-        }
-    }
-
-    private func presentStartupResetModal(storedEpoch: Int?) -> StartupModalAction {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "OmniWM needs to reset stale settings"
-        if let storedEpoch {
-            alert.informativeText =
-                "This build expects settings epoch \(SettingsMigration.currentSettingsEpoch), " +
-                "but found epoch \(storedEpoch). " +
-                "You can export a raw backup, reset to defaults, or quit."
-        } else {
-            alert.informativeText =
-                "This build expects settings epoch \(SettingsMigration.currentSettingsEpoch), " +
-                "but found older persisted settings with no epoch marker. " +
-                "You can export a raw backup, reset to defaults, or quit."
-        }
-        alert.addButton(withTitle: "Export Backup")
-        alert.addButton(withTitle: "Reset to Defaults")
-        alert.addButton(withTitle: "Quit")
-
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .exportBackup
-        case .alertSecondButtonReturn:
-            return .reset
-        default:
-            return .quit
         }
     }
 

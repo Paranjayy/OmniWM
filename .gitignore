@@ -12,11 +12,17 @@ Zig/omniwm_kernels/zig-out/
 .DS_Store
 
 
+<<<<<<< HEAD
 # Large build/dependency folders
 .build/
 .swiftpm/
 node_modules/
 .idea/
+=======
+# Build output
+dist/
+.build-review/
+>>>>>>> origin/main
 
 # Binaries/Caches
 *.o

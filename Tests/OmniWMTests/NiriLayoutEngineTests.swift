@@ -104,8 +104,8 @@ private func hasHiddenVisibilityChange(_ changes: [LayoutVisibilityChange]) -> B
 
 private func hiddenVisibilitySides(_ changes: [LayoutVisibilityChange]) -> [HideSide] {
     changes.compactMap { change in
-        if case let .hide(_, side: side) = change {
-            return side
+        if case let .hide(request) = change {
+            return request.side
         }
         return nil
     }
@@ -117,12 +117,12 @@ private func hasHideVisibilityChange(
     side: HideSide? = nil
 ) -> Bool {
     changes.contains { change in
-        guard case let .hide(candidate, changeSide) = change,
-              candidate == token
+        guard case let .hide(request) = change,
+              request.token == token
         else {
             return false
         }
-        return side == nil || side == changeSide
+        return side == nil || side == request.side
     }
 }
 
@@ -147,8 +147,25 @@ private func hasAnyVisibilityChange(
 
 private func hiddenVisibilityTokens(_ changes: [LayoutVisibilityChange]) -> [WindowToken] {
     changes.compactMap { change in
-        if case let .hide(token, side: _) = change {
-            return token
+        if case let .hide(request) = change {
+            return request.token
+        }
+        return nil
+    }
+}
+
+private func hideRequest(
+    _ changes: [LayoutVisibilityChange],
+    token: WindowToken
+) -> LayoutHideRequest? {
+    changes.first { change in
+        if case let .hide(request) = change {
+            return request.token == token
+        }
+        return false
+    }.flatMap { change in
+        if case let .hide(request) = change {
+            return request
         }
         return nil
     }
@@ -159,6 +176,20 @@ private func hasFrameChange(
     token: WindowToken
 ) -> Bool {
     changes.contains { $0.token == token }
+}
+
+private func expectConfig(
+    _ config: SpringConfig,
+    matches expected: SpringConfig,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    #expect(config.response == expected.response, sourceLocation: sourceLocation)
+    #expect(config.dampingFraction == expected.dampingFraction, sourceLocation: sourceLocation)
+    #expect(config.blendDuration == expected.blendDuration, sourceLocation: sourceLocation)
+    #expect(config.duration == expected.duration, sourceLocation: sourceLocation)
+    #expect(config.bounce == expected.bounce, sourceLocation: sourceLocation)
+    #expect(config.epsilon == expected.epsilon, sourceLocation: sourceLocation)
+    #expect(config.velocityEpsilon == expected.velocityEpsilon, sourceLocation: sourceLocation)
 }
 
 private enum CrossMonitorWorkspaceSide {
@@ -631,6 +662,83 @@ private func makeCenteredCrossMonitorFixture(
         )
     }
 
+    @MainActor
+    private func makeFullscreenRestoreHandlerFixture(
+        visibleCount: Int = 2,
+        extraColumns: Int = 2
+    ) async throws -> (
+        controller: WMController,
+        engine: NiriLayoutEngine,
+        workspaceId: WorkspaceDescriptor.ID,
+        monitor: Monitor,
+        windows: [NiriWindow],
+        gap: CGFloat,
+        workingFrame: CGRect
+    ) {
+        let controller = makeLayoutPlanTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            fatalError("Missing monitor or active workspace for fullscreen restore handler fixture")
+        }
+
+        controller.enableNiriLayout(
+            maxWindowsPerColumn: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        controller.updateNiriConfig(
+            maxVisibleColumns: visibleCount,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        guard let engine = controller.niriEngine else {
+            fatalError("Expected Niri engine for fullscreen restore handler fixture")
+        }
+
+        for windowId in 820 ..< 820 + visibleCount + extraColumns {
+            _ = addLayoutPlanTestWindow(
+                on: controller,
+                workspaceId: workspaceId,
+                windowId: windowId
+            )
+        }
+
+        let initialPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        await executeAndSettleLayoutPlans(initialPlans, on: controller)
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let workingFrame = controller.insetWorkingFrame(for: monitor)
+        let fixedWidth = (
+            workingFrame.width - gap * CGFloat(visibleCount - 1)
+        ) / CGFloat(visibleCount)
+
+        for column in engine.columns(in: workspaceId) {
+            column.width = .fixed(fixedWidth)
+            column.cachedWidth = fixedWidth
+        }
+
+        let refreshedPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        await executeAndSettleLayoutPlans(refreshedPlans, on: controller)
+
+        return (
+            controller,
+            engine,
+            workspaceId,
+            monitor,
+            engine.columns(in: workspaceId).compactMap(\.windowNodes.first),
+            gap,
+            workingFrame
+        )
+    }
+
     private func makeViewportStateForVisibleColumn(
         targetWindow: NiriWindow,
         engine: NiriLayoutEngine,
@@ -700,6 +808,15 @@ private func makeCenteredCrossMonitorFixture(
         gap: CGFloat
     ) -> CGFloat {
         state.columnX(at: state.activeColumnIndex, columns: columns, gap: gap)
+            + state.viewOffsetPixels.target()
+    }
+
+    private func planningViewportStart(
+        for state: ViewportState,
+        columns: [NiriContainer],
+        gap: CGFloat
+    ) -> CGFloat {
+        state.columnPlanningX(at: state.activeColumnIndex, columns: columns, gap: gap)
             + state.viewOffsetPixels.target()
     }
 
@@ -891,6 +1008,12 @@ private func makeCenteredCrossMonitorFixture(
             gaps: gaps,
             area: area
         )
+    }
+
+    @Test func niriWindowMovementUsesExactSnappyConfig() {
+        let engine = NiriLayoutEngine()
+
+        expectConfig(engine.windowMovementAnimationConfig, matches: .snappy)
     }
 
     @Test func selectionFallbackAfterRemoval_sameSibling() {
@@ -1641,14 +1764,14 @@ private func makeCenteredCrossMonitorFixture(
         #expect(abs(state.viewOffsetPixels.target() + leftWidth + gap) < 0.1)
     }
 
-    @Test func ensureSelectionVisibleDoesNotShiftFullyVisibleViewportInOnOverflowMode() {
+    @Test func ensureSelectionVisibleUsesNiriPairFitOrCenterRulesInOnOverflowMode() {
         struct Scenario {
             let label: String
             let visibleCount: Int
             let extraColumns: Int
             let initialActiveIndex: Int
             let targetIndex: Int
-            let expectedViewStartIndex: Int
+            let expectedViewStart: (CGFloat, CGFloat) -> CGFloat
         }
 
         let scenarios = [
@@ -1658,7 +1781,7 @@ private func makeCenteredCrossMonitorFixture(
                 extraColumns: 2,
                 initialActiveIndex: 0,
                 targetIndex: 1,
-                expectedViewStartIndex: 0
+                expectedViewStart: { columnStride, _ in columnStride / 2.0 }
             ),
             Scenario(
                 label: "visibleCount=2 middle pair forward",
@@ -1666,7 +1789,7 @@ private func makeCenteredCrossMonitorFixture(
                 extraColumns: 2,
                 initialActiveIndex: 1,
                 targetIndex: 2,
-                expectedViewStartIndex: 1
+                expectedViewStart: { columnStride, _ in columnStride * 1.5 }
             ),
             Scenario(
                 label: "visibleCount=2 middle pair backward",
@@ -1674,7 +1797,7 @@ private func makeCenteredCrossMonitorFixture(
                 extraColumns: 2,
                 initialActiveIndex: 2,
                 targetIndex: 1,
-                expectedViewStartIndex: 1
+                expectedViewStart: { columnStride, _ in columnStride / 2.0 }
             ),
             Scenario(
                 label: "visibleCount=2 last pair",
@@ -1682,7 +1805,7 @@ private func makeCenteredCrossMonitorFixture(
                 extraColumns: 2,
                 initialActiveIndex: 2,
                 targetIndex: 3,
-                expectedViewStartIndex: 2
+                expectedViewStart: { columnStride, _ in columnStride * 2.5 }
             ),
             Scenario(
                 label: "visibleCount=3 shifted visible span",
@@ -1690,7 +1813,7 @@ private func makeCenteredCrossMonitorFixture(
                 extraColumns: 2,
                 initialActiveIndex: 1,
                 targetIndex: 3,
-                expectedViewStartIndex: 1
+                expectedViewStart: { columnStride, gap in columnStride + gap }
             )
         ]
 
@@ -1709,7 +1832,7 @@ private func makeCenteredCrossMonitorFixture(
             }
 
             let columnStride = columnWidth + fixture.gap
-            let expectedViewStart = columnStride * CGFloat(scenario.expectedViewStartIndex)
+            let expectedViewStart = scenario.expectedViewStart(columnStride, fixture.gap)
 
             var state = ViewportState()
             state.selectedNodeId = fixture.windows[scenario.initialActiveIndex].id
@@ -1739,14 +1862,14 @@ private func makeCenteredCrossMonitorFixture(
         }
     }
 
-    @Test func ensureSelectionVisibleAlignsOffscreenViewportToExactVisibleSet() {
+    @Test func ensureSelectionVisibleAlignsOffscreenViewportUsingNiriFitOrCenterRules() {
         struct Scenario {
             let label: String
             let centerMode: CenterFocusedColumn
             let initialActiveIndex: Int
             let initialViewStartIndex: Int
             let targetIndex: Int
-            let expectedViewStartIndex: Int
+            let expectedViewStart: (CGFloat, CGFloat) -> CGFloat
         }
 
         let scenarios: [Scenario] = [
@@ -1756,7 +1879,7 @@ private func makeCenteredCrossMonitorFixture(
                 initialActiveIndex: 1,
                 initialViewStartIndex: 0,
                 targetIndex: 2,
-                expectedViewStartIndex: 1
+                expectedViewStart: { columnStride, _ in columnStride }
             ),
             .init(
                 label: "never left",
@@ -1764,7 +1887,7 @@ private func makeCenteredCrossMonitorFixture(
                 initialActiveIndex: 3,
                 initialViewStartIndex: 3,
                 targetIndex: 2,
-                expectedViewStartIndex: 2
+                expectedViewStart: { columnStride, _ in columnStride * 2.0 }
             ),
             .init(
                 label: "onOverflow right",
@@ -1772,7 +1895,7 @@ private func makeCenteredCrossMonitorFixture(
                 initialActiveIndex: 1,
                 initialViewStartIndex: 0,
                 targetIndex: 2,
-                expectedViewStartIndex: 1
+                expectedViewStart: { columnStride, _ in columnStride * 1.5 }
             ),
             .init(
                 label: "onOverflow left",
@@ -1780,7 +1903,7 @@ private func makeCenteredCrossMonitorFixture(
                 initialActiveIndex: 3,
                 initialViewStartIndex: 3,
                 targetIndex: 2,
-                expectedViewStartIndex: 2
+                expectedViewStart: { columnStride, _ in columnStride * 1.5 }
             ),
         ]
 
@@ -1814,7 +1937,7 @@ private func makeCenteredCrossMonitorFixture(
                 gaps: fixture.gap
             )
 
-            let expectedViewStart = CGFloat(scenario.expectedViewStartIndex) * columnStride
+            let expectedViewStart = scenario.expectedViewStart(columnStride, fixture.gap)
             let expectedTargetOffset = expectedViewStart
                 - state.columnX(at: scenario.targetIndex, columns: columns, gap: fixture.gap)
 
@@ -1877,6 +2000,69 @@ private func makeCenteredCrossMonitorFixture(
         #expect(columns[0].windowNodes.map(\.token) == [firstHandle.id])
         #expect(columns[1].windowNodes.map(\.token) == [focusedHandle.id])
         #expect(columns[2].windowNodes.map(\.token) == [rightHandle.id])
+    }
+
+    @Test func moveWindowHorizontalRightExpelAnimatesTrailingColumns() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3)
+        let wsId = UUID()
+
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let sourceColumn = NiriContainer()
+        let middleColumn = NiriContainer()
+        let trailingColumn = NiriContainer()
+        root.appendChild(sourceColumn)
+        root.appendChild(middleColumn)
+        root.appendChild(trailingColumn)
+        assignFixedWidths(root.columns)
+
+        let firstHandle = makeTestHandle(pid: 171)
+        let movedHandle = makeTestHandle(pid: 172)
+        let middleHandle = makeTestHandle(pid: 173)
+        let trailingHandle = makeTestHandle(pid: 174)
+        let firstWindow = NiriWindow(token: firstHandle.id)
+        let movedWindow = NiriWindow(token: movedHandle.id)
+        let middleWindow = NiriWindow(token: middleHandle.id)
+        let trailingWindow = NiriWindow(token: trailingHandle.id)
+
+        sourceColumn.appendChild(firstWindow)
+        sourceColumn.appendChild(movedWindow)
+        middleColumn.appendChild(middleWindow)
+        trailingColumn.appendChild(trailingWindow)
+
+        for window in [firstWindow, movedWindow, middleWindow, trailingWindow] {
+            engine.tokenToNode[window.token] = window
+        }
+
+        var state = ViewportState()
+        state.activeColumnIndex = 0
+
+        let moved = engine.moveWindow(
+            movedWindow,
+            direction: .right,
+            in: wsId,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        let columns = engine.columns(in: wsId)
+        #expect(moved)
+        #expect(columns.count == 4)
+        #expect(columns[0].windowNodes.map(\.token) == [firstHandle.id])
+        #expect(columns[1].windowNodes.map(\.token) == [movedHandle.id])
+        #expect(columns[2] === middleColumn)
+        #expect(columns[3] === trailingColumn)
+        #expect(middleColumn.hasMoveAnimationRunning)
+        #expect(trailingColumn.hasMoveAnimationRunning)
+
+        let middleOffset = middleColumn.moveAnimation?.fromOffset
+        let trailingOffset = trailingColumn.moveAnimation?.fromOffset
+        #expect(middleOffset != nil)
+        #expect(trailingOffset != nil)
+        #expect(middleOffset! < -300)
+        #expect(trailingOffset! < -300)
     }
 
     @Test func moveWindowHorizontalRightConsumesSingleWindowColumnIntoNeighbor() {
@@ -2076,6 +2262,65 @@ private func makeCenteredCrossMonitorFixture(
         let windowOffset = rightWindow.moveXAnimation?.fromOffset
         #expect(windowOffset != nil)
         #expect(windowOffset! > 300)
+    }
+
+    @Test func moveWindowHorizontalRightConsumeAnimatesAllTrailingColumns() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3)
+        let wsId = UUID()
+
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let sourceColumn = NiriContainer()
+        let targetColumn = NiriContainer()
+        let trailingColumn = NiriContainer()
+        root.appendChild(sourceColumn)
+        root.appendChild(targetColumn)
+        root.appendChild(trailingColumn)
+        assignFixedWidths(root.columns)
+
+        let sourceHandle = makeTestHandle(pid: 281)
+        let targetHandle = makeTestHandle(pid: 282)
+        let trailingHandle = makeTestHandle(pid: 283)
+        let sourceWindow = NiriWindow(token: sourceHandle.id)
+        let targetWindow = NiriWindow(token: targetHandle.id)
+        let trailingWindow = NiriWindow(token: trailingHandle.id)
+
+        sourceColumn.appendChild(sourceWindow)
+        targetColumn.appendChild(targetWindow)
+        trailingColumn.appendChild(trailingWindow)
+
+        for window in [sourceWindow, targetWindow, trailingWindow] {
+            engine.tokenToNode[window.token] = window
+        }
+
+        var state = ViewportState()
+        state.activeColumnIndex = 0
+
+        let moved = engine.moveWindow(
+            sourceWindow,
+            direction: .right,
+            in: wsId,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        let columns = engine.columns(in: wsId)
+        #expect(moved)
+        #expect(columns.count == 2)
+        #expect(columns[0] === targetColumn)
+        #expect(columns[1] === trailingColumn)
+        #expect(targetColumn.windowNodes.map(\.token) == [sourceHandle.id, targetHandle.id])
+        #expect(targetColumn.hasMoveAnimationRunning)
+        #expect(trailingColumn.hasMoveAnimationRunning)
+
+        let targetOffset = targetColumn.moveAnimation?.fromOffset
+        let trailingOffset = trailingColumn.moveAnimation?.fromOffset
+        #expect(targetOffset != nil)
+        #expect(trailingOffset != nil)
+        #expect(targetOffset! > 300)
+        #expect(trailingOffset! > 300)
     }
 
     @Test func ensureSelectionVisibleUsesExplicitPreviousActivePositionAfterColumnRemoval() {
@@ -2337,7 +2582,54 @@ private func makeCenteredCrossMonitorFixture(
             gaps: 8
         )
 
-        #expect(abs(state.viewOffsetPixels.target() + 604) < 0.1)
+        #expect(abs(state.viewOffsetPixels.target() + 400) < 0.1)
+    }
+
+    @Test func ensureSelectionVisibleOnOverflowCentersEdgeColumnsWhenPairsOverflow() {
+        let fixture = makeVisibleColumnFixture(visibleCount: 2, extraColumns: 1)
+        fixture.engine.centerFocusedColumn = .onOverflow
+        fixture.engine.alwaysCenterSingleColumn = false
+
+        let columns = fixture.engine.columns(in: fixture.workspaceId)
+        guard let columnWidth = columns.first?.cachedWidth else {
+            Issue.record("Expected equal-width columns for edge centering ensure-visible test")
+            return
+        }
+
+        let centeredEdgeViewStart = -(fixture.monitor.visibleFrame.width - columnWidth) / 2.0
+
+        var state = ViewportState()
+        state.selectedNodeId = fixture.windows[1].id
+        state.activeColumnIndex = 1
+        state.viewOffsetPixels = .static(centeredEdgeViewStart - state.columnX(at: 1, columns: columns, gap: fixture.gap))
+
+        fixture.engine.ensureSelectionVisible(
+            node: fixture.windows[0],
+            in: fixture.workspaceId,
+            state: &state,
+            workingFrame: fixture.monitor.visibleFrame,
+            gaps: fixture.gap
+        )
+
+        #expect(state.activeColumnIndex == 0)
+        #expect(abs(viewportStart(for: state, columns: columns, gap: fixture.gap) - centeredEdgeViewStart) < 0.1)
+
+        state.selectedNodeId = fixture.windows[1].id
+        state.activeColumnIndex = 1
+        state.viewOffsetPixels = .static(centeredEdgeViewStart - state.columnX(at: 1, columns: columns, gap: fixture.gap))
+
+        fixture.engine.ensureSelectionVisible(
+            node: fixture.windows[2],
+            in: fixture.workspaceId,
+            state: &state,
+            workingFrame: fixture.monitor.visibleFrame,
+            gaps: fixture.gap
+        )
+
+        let expectedLastViewStart = state.columnX(at: 2, columns: columns, gap: fixture.gap) + centeredEdgeViewStart
+
+        #expect(state.activeColumnIndex == 2)
+        #expect(abs(viewportStart(for: state, columns: columns, gap: fixture.gap) - expectedLastViewStart) < 0.1)
     }
 
     @Test func moveWindowVerticalKeepsInColumnReorderBehavior() {
@@ -2824,58 +3116,6 @@ private func makeCenteredCrossMonitorFixture(
         #expect(targetColumn.presetWidthIdx == nil)
     }
 
-    @Test func workspaceSwitchAnimationUsesSnapshotOrdering() {
-        let engine = NiriLayoutEngine(maxWindowsPerColumn: 1)
-        let monitor = makeTestMonitor(displayId: 300, name: "Main", x: 0)
-        let ws1 = UUID()
-        let ws2 = UUID()
-        let handle1 = makeTestHandle(pid: 11)
-        let handle2 = makeTestHandle(pid: 12)
-
-        let niriMonitor = engine.ensureMonitor(for: monitor.id, monitor: monitor)
-        niriMonitor.animationClock = AnimationClock()
-
-        _ = engine.addWindow(handle: handle1, to: ws1, afterSelection: nil)
-        _ = engine.addWindow(handle: handle2, to: ws2, afterSelection: nil)
-        engine.moveWorkspace(ws1, to: monitor.id, monitor: monitor)
-        engine.moveWorkspace(ws2, to: monitor.id, monitor: monitor)
-
-        niriMonitor.startWorkspaceSwitch(
-            orderedWorkspaceIds: [ws1, ws2],
-            from: ws1,
-            to: ws2,
-            animated: true
-        )
-
-        guard let time = niriMonitor.animationClock?.now() else {
-            Issue.record("Expected animation clock for workspace switch test")
-            return
-        }
-        let state = ViewportState()
-        let gaps = LayoutGaps(horizontal: 8, vertical: 8)
-
-        let layout1 = engine.calculateCombinedLayoutWithVisibility(
-            in: ws1,
-            monitor: monitor,
-            gaps: gaps,
-            state: state,
-            animationTime: time
-        )
-        let layout2 = engine.calculateCombinedLayoutWithVisibility(
-            in: ws2,
-            monitor: monitor,
-            gaps: gaps,
-            state: state,
-            animationTime: time
-        )
-
-        #expect(niriMonitor.workspaceSwitch?.fromWorkspaceId == ws1)
-        #expect(niriMonitor.workspaceSwitch?.toWorkspaceId == ws2)
-        #expect(niriMonitor.workspaceSwitch?.orderedWorkspaceIds == [ws1, ws2])
-        #expect(layout1.frames[handle1.id]?.minX == 0)
-        #expect((layout2.frames[handle2.id]?.minX ?? 0) > 0)
-    }
-
     @Test @MainActor func relayoutPlanUsesResolvedMonitorSingleWindowAspectRatio() async throws {
         let monitor = makeLayoutPlanTestMonitor(name: "SquareTest")
         let controller = makeLayoutPlanTestController(monitors: [monitor])
@@ -2932,6 +3172,63 @@ private func makeCenteredCrossMonitorFixture(
 
         #expect(baselineFrame.width > overrideFrame.width)
         #expect(abs(overrideFrame.width - overrideFrame.height) < 0.5)
+    }
+
+    @Test @MainActor func globalCenterFocusedColumnUpdatesResolvedMonitorSettingsImmediately() async {
+        let monitor = makeLayoutPlanTestMonitor(name: "CenterFocusTest")
+        let controller = makeLayoutPlanTestController(monitors: [monitor])
+        controller.settings.niriCenterFocusedColumn = .never
+
+        controller.enableNiriLayout(
+            maxWindowsPerColumn: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        guard let engine = controller.niriEngine else {
+            Issue.record("Missing Niri engine for global center-focused-column test")
+            return
+        }
+
+        #expect(controller.settings.niriSettings(for: monitor) == nil)
+        #expect(engine.effectiveCenterFocusedColumn(for: monitor.id) == .never)
+
+        controller.settings.niriCenterFocusedColumn = .always
+        controller.updateNiriConfig(centerFocusedColumn: .always)
+        await waitForLayoutPlanRefreshWork(on: controller)
+
+        #expect(engine.effectiveCenterFocusedColumn(for: monitor.id) == .always)
+    }
+
+    @Test @MainActor func globalSingleWindowAspectRatioUpdatesResolvedMonitorSettingsImmediately() async {
+        let monitor = makeLayoutPlanTestMonitor(name: "AspectRatioTest")
+        let controller = makeLayoutPlanTestController(monitors: [monitor])
+        controller.settings.niriSingleWindowAspectRatio = .ratio4x3
+
+        controller.enableNiriLayout(
+            maxWindowsPerColumn: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        controller.updateNiriConfig(singleWindowAspectRatio: .ratio4x3)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        guard let engine = controller.niriEngine else {
+            Issue.record("Missing Niri engine for global single-window-aspect-ratio test")
+            return
+        }
+
+        #expect(controller.settings.niriSettings(for: monitor) == nil)
+        #expect(engine.effectiveSingleWindowAspectRatio(for: monitor.id) == .ratio4x3)
+
+        controller.settings.niriSingleWindowAspectRatio = .square
+        controller.updateNiriConfig(singleWindowAspectRatio: .square)
+        await waitForLayoutPlanRefreshWork(on: controller)
+
+        #expect(engine.effectiveSingleWindowAspectRatio(for: monitor.id) == .square)
     }
 
     @Test @MainActor func snapshotPlanIncludesViewportPatchAndActivationForNewWindow() async throws {
@@ -3297,6 +3594,8 @@ private func makeCenteredCrossMonitorFixture(
     }
 
     @Test func fullscreenWindowsStayMonitorAnchoredAcrossVisibleColumns() {
+        // Direct engine coverage for fullscreen sizing/restore. The
+        // handler-driven immediate-relayout path is covered separately.
         for visibleCount in 2 ... 5 {
             let fixture = makeVisibleColumnFixture(visibleCount: visibleCount)
             let expectedFullscreenFrame = fixture.monitor.visibleFrame.roundedToPhysicalPixels(scale: fixture.area.scale)
@@ -3359,6 +3658,180 @@ private func makeCenteredCrossMonitorFixture(
                 #expect(restoredLayout.frames[targetWindow.token] == tiledFrame)
             }
         }
+    }
+
+    @Test @MainActor func handlerFullscreenTogglePreservesRestoreOffsetAcrossImmediateRelayouts() async throws {
+        struct Scenario {
+            let label: String
+            let expectsNonZeroRestoreOffset: Bool
+        }
+
+        for scenario in [
+            Scenario(label: "right edge", expectsNonZeroRestoreOffset: true),
+            Scenario(label: "left edge", expectsNonZeroRestoreOffset: false),
+        ] {
+            let fixture = try await makeFullscreenRestoreHandlerFixture()
+            let targetWindow = if scenario.expectsNonZeroRestoreOffset {
+                fixture.windows[fixture.windows.index(before: fixture.windows.endIndex)]
+            } else {
+                fixture.windows[fixture.windows.startIndex]
+            }
+
+            selectWindowAndSettleViewport(
+                targetWindow,
+                in: fixture.workspaceId,
+                on: fixture.monitor,
+                engine: fixture.engine,
+                controller: fixture.controller
+            )
+
+            let selectedPlans = try await fixture.controller.niriLayoutHandler.layoutWithNiriEngine(
+                activeWorkspaces: [fixture.workspaceId]
+            )
+            await executeAndSettleLayoutPlans(selectedPlans, on: fixture.controller)
+
+            let columns = fixture.engine.columns(in: fixture.workspaceId)
+            let preEnterState = fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId)
+            let preEnterOffset = preEnterState.viewOffsetPixels.target()
+            let preEnterViewStart = viewportStart(for: preEnterState, columns: columns, gap: fixture.gap)
+            let comment = Comment(rawValue: scenario.label)
+
+            if scenario.expectsNonZeroRestoreOffset {
+                #expect(abs(preEnterOffset) > 0.1, comment)
+            } else {
+                #expect(abs(preEnterOffset) < 0.1, comment)
+            }
+
+            fixture.controller.niriLayoutHandler.toggleFullscreen()
+            await fixture.controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+            let enteredState = fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId)
+            #expect(enteredState.selectedNodeId == targetWindow.id, comment)
+            guard let savedRestoreOffset = enteredState.viewOffsetToRestore else {
+                Issue.record("Missing saved fullscreen restore offset after enter-side relayout for \(scenario.label)")
+                continue
+            }
+
+            #expect(abs(savedRestoreOffset - preEnterOffset) < 0.1, comment)
+
+            fixture.controller.layoutRefreshController.settleAllAnimationsForTests()
+            fixture.controller.niriLayoutHandler.toggleFullscreen()
+            await fixture.controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+            let exitedState = fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId)
+            let exitedViewStart = viewportStart(
+                for: exitedState,
+                columns: fixture.engine.columns(in: fixture.workspaceId),
+                gap: fixture.gap
+            )
+
+            #expect(!exitedState.viewOffsetPixels.isAnimating, comment)
+            #expect(abs(exitedViewStart - preEnterViewStart) < 0.1, comment)
+            #expect(exitedState.viewOffsetToRestore == nil, comment)
+        }
+    }
+
+    @Test func focusColumnAlwaysModeKeepsFullscreenEdgeColumnsMonitorAnchored() {
+        struct Scenario {
+            let label: String
+            let targetIndex: Int
+            let currentIndex: Int
+        }
+
+        for scenario in [
+            Scenario(label: "focus last fullscreen edge", targetIndex: 1, currentIndex: 0),
+            Scenario(label: "focus first fullscreen edge", targetIndex: 0, currentIndex: 1),
+        ] {
+            let fixture = makeVisibleColumnFixture(visibleCount: 2, extraColumns: 0)
+            fixture.engine.centerFocusedColumn = .always
+            fixture.engine.alwaysCenterSingleColumn = false
+
+            let targetWindow = fixture.windows[scenario.targetIndex]
+            let currentWindow = fixture.windows[scenario.currentIndex]
+            var state = makeViewportStateForVisibleColumn(
+                targetWindow: currentWindow,
+                engine: fixture.engine,
+                workspaceId: fixture.workspaceId,
+                workingFrame: fixture.monitor.visibleFrame,
+                gap: fixture.gap
+            )
+
+            fixture.engine.toggleFullscreen(targetWindow, state: &state)
+            let focused = fixture.engine.focusColumn(
+                scenario.targetIndex,
+                currentSelection: currentWindow,
+                in: fixture.workspaceId,
+                motion: .disabled,
+                state: &state,
+                workingFrame: fixture.monitor.visibleFrame,
+                gaps: fixture.gap
+            )
+
+            let columns = fixture.engine.columns(in: fixture.workspaceId)
+            let expectedViewStart = state.columnX(
+                at: scenario.targetIndex,
+                columns: columns,
+                gap: fixture.gap
+            )
+
+            #expect(focused?.id == targetWindow.id, Comment(rawValue: scenario.label))
+            #expect(state.activeColumnIndex == scenario.targetIndex, Comment(rawValue: scenario.label))
+            #expect(abs(state.viewOffsetPixels.target()) < 0.1, Comment(rawValue: scenario.label))
+            #expect(
+                abs(viewportStart(for: state, columns: columns, gap: fixture.gap) - expectedViewStart) < 0.1,
+                Comment(rawValue: scenario.label)
+            )
+        }
+    }
+
+    @Test func ensureSelectionVisibleOnOverflowKeepsTabbedFullscreenColumnMonitorAnchored() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 2, maxVisibleColumns: 2)
+        engine.centerFocusedColumn = .onOverflow
+        engine.alwaysCenterSingleColumn = false
+
+        let workspaceId = UUID()
+        let root = NiriRoot(workspaceId: workspaceId)
+        engine.roots[workspaceId] = root
+
+        let tabbedColumn = NiriContainer()
+        tabbedColumn.displayMode = .tabbed
+        let rightColumn = NiriContainer()
+        root.appendChild(tabbedColumn)
+        root.appendChild(rightColumn)
+
+        let tabbedWindow = NiriWindow(token: .init(pid: 801, windowId: 1))
+        let fullscreenSibling = NiriWindow(token: .init(pid: 801, windowId: 2))
+        fullscreenSibling.sizingMode = .fullscreen
+        let rightWindow = NiriWindow(token: .init(pid: 802, windowId: 1))
+
+        tabbedColumn.appendChild(tabbedWindow)
+        tabbedColumn.appendChild(fullscreenSibling)
+        tabbedColumn.setActiveTileIdx(0)
+        rightColumn.appendChild(rightWindow)
+        assignWidths([tabbedColumn, rightColumn], widths: [400, 400])
+
+        let workingFrame = CGRect(x: 0, y: 0, width: 1_200, height: 900)
+        let gap: CGFloat = 8
+        var state = makeViewportStateForVisibleColumn(
+            targetWindow: rightWindow,
+            engine: engine,
+            workspaceId: workspaceId,
+            workingFrame: workingFrame,
+            gap: gap
+        )
+
+        engine.ensureSelectionVisible(
+            node: tabbedWindow,
+            in: workspaceId,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+
+        let columns = engine.columns(in: workspaceId)
+        #expect(state.activeColumnIndex == 0)
+        #expect(abs(state.viewOffsetPixels.target()) < 0.1)
+        #expect(abs(viewportStart(for: state, columns: columns, gap: gap)) < 0.1)
     }
 
     @Test func fullscreenBottomTileUsesFullMonitorHeightWithoutCarryoverOffset() {
@@ -3575,6 +4048,7 @@ private func makeCenteredCrossMonitorFixture(
                 workingFrame: fixture.monitor.visibleFrame,
                 gap: fixture.gap
             )
+            state.viewOffsetPixels = .static(state.viewOffsetPixels.target())
             let originalLayout = fixture.engine.calculateCombinedLayoutUsingPools(
                 in: fixture.workspaceId,
                 monitor: fixture.monitor,
@@ -4017,6 +4491,204 @@ private func makeCenteredCrossMonitorFixture(
 
         #expect(inserted)
         #expect(orderedWindowIds == [focusedWindow.token.windowId, targetWindow.token.windowId, trailingWindow.token.windowId])
+    }
+
+    @Test func moveColumnRightAnimatesMovedAndDisplacedColumns() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3, maxVisibleColumns: 3)
+        let wsId = UUID()
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let leftColumn = NiriContainer()
+        let movedColumn = NiriContainer()
+        let rightColumn = NiriContainer()
+        root.appendChild(leftColumn)
+        root.appendChild(movedColumn)
+        root.appendChild(rightColumn)
+        assignFixedWidths(root.columns)
+
+        let leftWindow = NiriWindow(token: makeTestHandle(pid: 151).id)
+        let movedWindow = NiriWindow(token: makeTestHandle(pid: 152).id)
+        let rightWindow = NiriWindow(token: makeTestHandle(pid: 153).id)
+        leftColumn.appendChild(leftWindow)
+        movedColumn.appendChild(movedWindow)
+        rightColumn.appendChild(rightWindow)
+        for window in [leftWindow, movedWindow, rightWindow] {
+            engine.tokenToNode[window.token] = window
+        }
+
+        var state = ViewportState()
+        state.activeColumnIndex = 1
+
+        let moved = engine.moveColumn(
+            movedColumn,
+            direction: .right,
+            in: wsId,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        let orderedWindowIds = engine.columns(in: wsId).compactMap { $0.windowNodes.first?.token.windowId }
+        #expect(moved)
+        #expect(orderedWindowIds == [leftWindow.token.windowId, rightWindow.token.windowId, movedWindow.token.windowId])
+        #expect(movedColumn.hasMoveAnimationRunning)
+        #expect(rightColumn.hasMoveAnimationRunning)
+        #expect(!leftColumn.hasMoveAnimationRunning)
+
+        let movedOffset = movedColumn.moveAnimation?.fromOffset
+        let displacedOffset = rightColumn.moveAnimation?.fromOffset
+        #expect(movedOffset != nil)
+        #expect(displacedOffset != nil)
+        #expect(movedOffset! < -300)
+        #expect(displacedOffset! > 300)
+    }
+
+    @Test func moveColumnLeftAnimatesMovedAndDisplacedColumns() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3, maxVisibleColumns: 3)
+        let wsId = UUID()
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let leftColumn = NiriContainer()
+        let movedColumn = NiriContainer()
+        let rightColumn = NiriContainer()
+        root.appendChild(leftColumn)
+        root.appendChild(movedColumn)
+        root.appendChild(rightColumn)
+        assignFixedWidths(root.columns)
+
+        let leftWindow = NiriWindow(token: makeTestHandle(pid: 161).id)
+        let movedWindow = NiriWindow(token: makeTestHandle(pid: 162).id)
+        let rightWindow = NiriWindow(token: makeTestHandle(pid: 163).id)
+        leftColumn.appendChild(leftWindow)
+        movedColumn.appendChild(movedWindow)
+        rightColumn.appendChild(rightWindow)
+        for window in [leftWindow, movedWindow, rightWindow] {
+            engine.tokenToNode[window.token] = window
+        }
+
+        var state = ViewportState()
+        state.activeColumnIndex = 1
+
+        let moved = engine.moveColumn(
+            movedColumn,
+            direction: .left,
+            in: wsId,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        let orderedWindowIds = engine.columns(in: wsId).compactMap { $0.windowNodes.first?.token.windowId }
+        #expect(moved)
+        #expect(orderedWindowIds == [movedWindow.token.windowId, leftWindow.token.windowId, rightWindow.token.windowId])
+        #expect(movedColumn.hasMoveAnimationRunning)
+        #expect(leftColumn.hasMoveAnimationRunning)
+        #expect(!rightColumn.hasMoveAnimationRunning)
+
+        let movedOffset = movedColumn.moveAnimation?.fromOffset
+        let displacedOffset = leftColumn.moveAnimation?.fromOffset
+        #expect(movedOffset != nil)
+        #expect(displacedOffset != nil)
+        #expect(movedOffset! > 300)
+        #expect(displacedOffset! < -300)
+    }
+
+    @Test func insertWindowByMoveReordersThroughTopologyKernel() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3, maxVisibleColumns: 3)
+        let wsId = UUID()
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let sourceColumn = NiriContainer()
+        let targetColumn = NiriContainer()
+        root.appendChild(sourceColumn)
+        root.appendChild(targetColumn)
+        assignFixedWidths(root.columns)
+
+        let movedWindow = NiriWindow(token: makeTestHandle(pid: 501).id)
+        let sourcePeer = NiriWindow(token: makeTestHandle(pid: 502).id)
+        let targetFirst = NiriWindow(token: makeTestHandle(pid: 503).id)
+        let targetSecond = NiriWindow(token: makeTestHandle(pid: 504).id)
+
+        movedWindow.size = 2.0
+        sourceColumn.appendChild(movedWindow)
+        sourceColumn.appendChild(sourcePeer)
+        targetColumn.appendChild(targetFirst)
+        targetColumn.appendChild(targetSecond)
+        for window in [movedWindow, sourcePeer, targetFirst, targetSecond] {
+            engine.tokenToNode[window.token] = window
+        }
+
+        var state = ViewportState()
+        state.selectedNodeId = movedWindow.id
+        state.activeColumnIndex = 0
+
+        let inserted = engine.insertWindowByMove(
+            sourceWindowId: movedWindow.id,
+            targetWindowId: targetSecond.id,
+            position: .before,
+            in: wsId,
+            motion: .disabled,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        #expect(inserted)
+        #expect(engine.columns(in: wsId).count == 2)
+        #expect(sourceColumn.windowNodes.map(\.token) == [sourcePeer.token])
+        #expect(targetColumn.windowNodes.map(\.token) == [targetFirst.token, movedWindow.token, targetSecond.token])
+        #expect(movedWindow.size == 1.0)
+        #expect(movedWindow.height == .default)
+        #expect(state.activeColumnIndex == 1)
+        #expect(state.selectedNodeId == movedWindow.id)
+    }
+
+    @Test func swapWindowsByMoveUsesKernelTopologyAndSwapsCrossColumnSizes() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 3, maxVisibleColumns: 3)
+        let wsId = UUID()
+        let root = NiriRoot(workspaceId: wsId)
+        engine.roots[wsId] = root
+
+        let sourceColumn = NiriContainer()
+        let targetColumn = NiriContainer()
+        root.appendChild(sourceColumn)
+        root.appendChild(targetColumn)
+        assignFixedWidths(root.columns)
+
+        let sourceWindow = NiriWindow(token: makeTestHandle(pid: 511).id)
+        let targetWindow = NiriWindow(token: makeTestHandle(pid: 512).id)
+        sourceWindow.size = 2.0
+        targetWindow.size = 3.0
+
+        sourceColumn.appendChild(sourceWindow)
+        targetColumn.appendChild(targetWindow)
+        engine.tokenToNode[sourceWindow.token] = sourceWindow
+        engine.tokenToNode[targetWindow.token] = targetWindow
+
+        var state = ViewportState()
+        state.selectedNodeId = sourceWindow.id
+        state.activeColumnIndex = 0
+
+        let swapped = engine.swapWindowsByMove(
+            sourceWindowId: sourceWindow.id,
+            targetWindowId: targetWindow.id,
+            in: wsId,
+            motion: .disabled,
+            state: &state,
+            workingFrame: CGRect(x: 0, y: 0, width: 1200, height: 900),
+            gaps: 8
+        )
+
+        #expect(swapped)
+        #expect(sourceColumn.windowNodes.map(\.token) == [targetWindow.token])
+        #expect(targetColumn.windowNodes.map(\.token) == [sourceWindow.token])
+        #expect(sourceWindow.size == 3.0)
+        #expect(targetWindow.size == 2.0)
+        #expect(state.activeColumnIndex == 1)
+        #expect(state.selectedNodeId == sourceWindow.id)
     }
 
     @Test func moveWindowToWorkspaceThenInsertColumnPreservesSourceFallbackSelection() {
@@ -4911,7 +5583,9 @@ private func makeCenteredCrossMonitorFixture(
         controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
             state.selectedNodeId = firstNode.id
             state.activeColumnIndex = 0
-            state.viewOffsetPixels = .static(20)
+            // Fractional monitor origins can still leave the trailing column
+            // hidden at smaller offsets, so seed from a clearly visible state.
+            state.viewOffsetPixels = .static(200)
         }
 
         let seededVisiblePlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
@@ -4973,6 +5647,361 @@ private func makeCenteredCrossMonitorFixture(
         }
 
         #expect(!hasAnyVisibilityChange(stableVisiblePlan.diff.visibilityChanges, token: transitioningToken))
+    }
+
+    @Test @MainActor func hiddenVisibilityChangeCarriesKernelRenderedFrame() async throws {
+        let monitor = makeLayoutPlanTestMonitor(width: 1600, height: 900)
+        let controller = makeLayoutPlanTestController(monitors: [monitor])
+        guard let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing workspace for hidden-frame boundary test")
+            return
+        }
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        let firstToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 913)
+        let hiddenToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 914)
+
+        _ = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let engine = controller.niriEngine,
+              let firstNode = engine.findNode(for: firstToken)
+        else {
+            Issue.record("Expected engine and first node for hidden-frame boundary test")
+            return
+        }
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let columnWidth = controller.insetWorkingFrame(for: monitor).width - gap
+        for column in engine.columns(in: workspaceId) {
+            column.width = .fixed(columnWidth)
+            column.cachedWidth = columnWidth
+        }
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(200)
+        }
+
+        let seededVisiblePlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let seededVisiblePlan = seededVisiblePlans.first else {
+            Issue.record("Expected a seeded visible plan for physical-pixel hidden-origin test")
+            return
+        }
+        #expect(!hasHideVisibilityChange(seededVisiblePlan.diff.visibilityChanges, token: hiddenToken))
+        controller.layoutRefreshController.executeLayoutPlans(seededVisiblePlans)
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(-200)
+        }
+
+        let state = controller.workspaceManager.niriViewportState(for: workspaceId)
+        let layout = engine.calculateCombinedLayoutUsingPools(
+            in: workspaceId,
+            monitor: monitor,
+            gaps: LayoutGaps(horizontal: gap, vertical: gap),
+            state: state,
+            workingArea: WorkingAreaContext(
+                workingFrame: monitor.visibleFrame,
+                viewFrame: monitor.frame,
+                scale: 2.0
+            ),
+            animationTime: nil
+        )
+        let plans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let plan = plans.first,
+              let request = hideRequest(plan.diff.visibilityChanges, token: hiddenToken),
+              let expectedSide = layout.hiddenHandles[hiddenToken],
+              let expectedFrame = layout.frames[hiddenToken]
+        else {
+            Issue.record("Expected a hide request for the offscreen column")
+            return
+        }
+
+        #expect(request.side == expectedSide)
+        #expect(request.hiddenFrame.size == expectedFrame.size)
+        #expect(abs(request.hiddenFrame.origin.x - expectedFrame.origin.x) < 0.6)
+        #expect(abs(request.hiddenFrame.origin.y - expectedFrame.origin.y) < 0.6)
+    }
+
+    @Test @MainActor func hiddenVisibilityReemitsWhenSameSideHiddenOriginChanges() async throws {
+        let initialMonitor = makeLayoutPlanTestMonitor(width: 1600, height: 900)
+        let controller = makeLayoutPlanTestController(monitors: [initialMonitor])
+        guard let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: initialMonitor.id)?.id
+        else {
+            Issue.record("Missing workspace for same-side hidden-origin test")
+            return
+        }
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        let firstToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 915)
+        let hiddenToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 916)
+
+        _ = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let engine = controller.niriEngine,
+              let firstNode = engine.findNode(for: firstToken)
+        else {
+            Issue.record("Expected engine and first node for same-side hidden-origin test")
+            return
+        }
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let columnWidth = controller.insetWorkingFrame(for: initialMonitor).width - gap
+        for column in engine.columns(in: workspaceId) {
+            column.width = .fixed(columnWidth)
+            column.cachedWidth = columnWidth
+        }
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(20)
+        }
+
+        let seededVisiblePlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(seededVisiblePlans)
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(0)
+        }
+
+        let initialPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let initialPlan = initialPlans.first,
+              let initialRequest = hideRequest(initialPlan.diff.visibilityChanges, token: hiddenToken)
+        else {
+            Issue.record("Expected an initial hide request for same-side hidden-origin test")
+            return
+        }
+        controller.layoutRefreshController.executeLayoutPlans(initialPlans)
+
+        let shiftedMonitor = makeLayoutPlanTestMonitor(
+            displayId: initialMonitor.displayId,
+            name: initialMonitor.name,
+            x: 320,
+            y: 0,
+            width: initialMonitor.frame.width,
+            height: initialMonitor.frame.height
+        )
+        controller.workspaceManager.applyMonitorConfigurationChange([shiftedMonitor])
+        controller.syncMonitorsToNiriEngine()
+
+        let shiftedPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let shiftedPlan = shiftedPlans.first,
+              let shiftedRequest = hideRequest(shiftedPlan.diff.visibilityChanges, token: hiddenToken)
+        else {
+            Issue.record("Expected a rehide request after monitor geometry changed")
+            return
+        }
+
+        #expect(shiftedRequest.side == initialRequest.side)
+        #expect(shiftedRequest.hiddenFrame.origin != initialRequest.hiddenFrame.origin)
+    }
+
+    @Test @MainActor func hiddenVisibilityReemitsWhenSameSideHiddenOriginChangesByPhysicalPixel() async throws {
+        let initialMonitor = makeLayoutPlanTestMonitor(
+            displayId: layoutPlanTestSyntheticDisplayId(7),
+            x: 0.6,
+            y: 0,
+            width: 1600,
+            height: 900
+        )
+        let controller = makeLayoutPlanTestController(monitors: [initialMonitor])
+        guard let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: initialMonitor.id)?.id
+        else {
+            Issue.record("Missing workspace for physical-pixel hidden-origin test")
+            return
+        }
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        let firstToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 917)
+        let hiddenToken = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: 918)
+
+        _ = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let engine = controller.niriEngine,
+              let firstNode = engine.findNode(for: firstToken)
+        else {
+            Issue.record("Expected engine and first node for physical-pixel hidden-origin test")
+            return
+        }
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let columnWidth = controller.insetWorkingFrame(for: initialMonitor).width - gap
+        for column in engine.columns(in: workspaceId) {
+            column.width = .fixed(columnWidth)
+            column.cachedWidth = columnWidth
+        }
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(20)
+        }
+
+        let seededVisiblePlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(seededVisiblePlans)
+
+        let baselineOffsets: [CGFloat] = [-1200, -800, -400, -200, 0, 200, 400]
+        var baselineOffset: CGFloat?
+        var initialSide: HideSide?
+        var initialHiddenFrame: CGRect?
+
+        for candidateOffset in baselineOffsets {
+            controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+                state.selectedNodeId = firstNode.id
+                state.activeColumnIndex = 0
+                state.viewOffsetPixels = .static(candidateOffset)
+            }
+
+            let candidateState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            let candidateLayout = engine.calculateCombinedLayoutUsingPools(
+                in: workspaceId,
+                monitor: initialMonitor,
+                gaps: LayoutGaps(horizontal: gap, vertical: gap),
+                state: candidateState,
+                workingArea: WorkingAreaContext(
+                    workingFrame: initialMonitor.visibleFrame,
+                    viewFrame: initialMonitor.frame,
+                    scale: 2.0
+                ),
+                animationTime: nil
+            )
+
+            if let candidateSide = candidateLayout.hiddenHandles[hiddenToken],
+               let candidateHiddenFrame = candidateLayout.frames[hiddenToken]
+            {
+                baselineOffset = candidateOffset
+                initialSide = candidateSide
+                initialHiddenFrame = candidateHiddenFrame
+                break
+            }
+        }
+
+        guard let baselineOffset,
+              let initialSide,
+              let initialHiddenFrame
+        else {
+            Issue.record("Expected a baseline hidden frame for physical-pixel hidden-origin test")
+            return
+        }
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = firstNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .static(baselineOffset)
+        }
+
+        let initialPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(initialPlans)
+
+        let shiftedMonitor = makeLayoutPlanTestMonitor(
+            displayId: initialMonitor.displayId,
+            name: initialMonitor.name,
+            x: 1.1,
+            y: 0,
+            width: initialMonitor.frame.width,
+            height: initialMonitor.frame.height
+        )
+        controller.workspaceManager.applyMonitorConfigurationChange([shiftedMonitor])
+        controller.syncMonitorsToNiriEngine()
+
+        let shiftedPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        guard let shiftedPlan = shiftedPlans.first,
+              let shiftedRequest = hideRequest(shiftedPlan.diff.visibilityChanges, token: hiddenToken)
+        else {
+            Issue.record("Expected a rehide request after a one-physical-pixel origin shift")
+            return
+        }
+
+        let pixelRoundedInitial = initialHiddenFrame.origin.roundedToPhysicalPixels(scale: 2.0)
+        let pixelRoundedShifted = shiftedRequest.hiddenFrame.origin.roundedToPhysicalPixels(scale: 2.0)
+
+        #expect(shiftedRequest.side == initialSide)
+        #expect(abs(shiftedRequest.hiddenFrame.origin.x - initialHiddenFrame.origin.x - 0.5) < 0.01)
+        #expect(pixelRoundedInitial != pixelRoundedShifted)
+    }
+
+    @Test func transitionToColumnUsesPlanningWidthDuringFullWidthAnimation() {
+        let fixture = makeVisibleColumnFixture(visibleCount: 2, extraColumns: 1)
+        fixture.engine.animationClock = AnimationClock()
+        let columns = fixture.engine.columns(in: fixture.workspaceId)
+        guard columns.count == 3 else {
+            Issue.record("Expected three columns for planning-width transition test")
+            return
+        }
+
+        let targetColumn = columns[1]
+        var state = ViewportState()
+        state.animationClock = fixture.engine.animationClock
+        state.selectedNodeId = fixture.windows[1].id
+        state.activeColumnIndex = 1
+        state.viewOffsetPixels = .static(-state.columnX(at: 1, columns: columns, gap: fixture.gap))
+
+        fixture.engine.toggleFullWidth(
+            targetColumn,
+            in: fixture.workspaceId,
+            state: &state,
+            workingFrame: fixture.monitor.visibleFrame,
+            gaps: fixture.gap
+        )
+
+        state.transitionToColumn(
+            2,
+            columns: columns,
+            gap: fixture.gap,
+            viewportWidth: fixture.monitor.visibleFrame.width,
+            motion: .disabled,
+            animate: false,
+            centerMode: .never,
+            alwaysCenterSingleColumn: false,
+            fromColumnIndex: 1,
+            scale: fixture.area.scale
+        )
+
+        let expectedPlanningStart = max(
+            0,
+            state.columnPlanningX(at: 2, columns: columns, gap: fixture.gap)
+                + columns[2].planningWidth
+                - fixture.monitor.visibleFrame.width
+        )
+
+        #expect(targetColumn.targetWidth == fixture.monitor.visibleFrame.width)
+        #expect(abs(planningViewportStart(for: state, columns: columns, gap: fixture.gap) - expectedPlanningStart) < 0.1)
+        #expect(planningViewportStart(for: state, columns: columns, gap: fixture.gap) > 1200)
     }
 
     @Test @MainActor func centeredColumnsDoNotEmitPrimaryWorkspaceFramesAcrossSecondaryMonitorBoundary() async throws {
@@ -5528,7 +6557,7 @@ private func makeCenteredCrossMonitorFixture(
         #expect(lastAppliedBorderFrameForLayoutPlanTests(on: controller) == observedFrame)
     }
 
-    @Test @MainActor func focusNeighborRoundTripDoesNotStartSecondSpringAfterSettledOffscreenMove() async throws {
+    @Test @MainActor func focusNeighborRoundTripUsesDistinctReturnTargetAfterSettledOffscreenMove() async throws {
         let controller = makeLayoutPlanTestController()
         guard let monitor = controller.workspaceManager.monitors.first,
               let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
@@ -5741,6 +6770,273 @@ private func makeCenteredCrossMonitorFixture(
             let finalState = controller.workspaceManager.niriViewportState(for: workspaceId)
             #expect(controller.workspaceManager.preferredFocusToken(in: workspaceId) == windows[0].token, comment)
             #expect(abs(viewportStart(for: finalState, columns: columns, gap: gap)) < 0.1, comment)
+        }
+    }
+
+    @Test @MainActor func focusNeighborWithinVisibleStripDoesNotShiftViewportInNeverMode() async throws {
+        let controller = makeLayoutPlanTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing monitor or active workspace for in-strip focus-neighbor regression test")
+            return
+        }
+
+        controller.enableNiriLayout(
+            maxWindowsPerColumn: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.syncMonitorsToNiriEngine()
+
+        guard let engine = controller.niriEngine else {
+            Issue.record("Expected Niri engine for in-strip focus-neighbor regression test")
+            return
+        }
+
+        for windowId in 657 ... 662 {
+            _ = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: windowId)
+        }
+
+        let initialPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(initialPlans)
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let workingFrame = controller.insetWorkingFrame(for: monitor)
+
+        struct Scenario {
+            let visibleCount: Int
+            let startingActiveIndex: Int
+        }
+
+        let scenarios = [
+            Scenario(visibleCount: 2, startingActiveIndex: 0),
+            Scenario(visibleCount: 3, startingActiveIndex: 1),
+        ]
+
+        for scenario in scenarios {
+            let comment = Comment(rawValue: "maxVisibleColumns=\(scenario.visibleCount)")
+            engine.maxVisibleColumns = scenario.visibleCount
+            engine.centerFocusedColumn = .never
+            engine.alwaysCenterSingleColumn = false
+
+            let fixedWidth = (
+                workingFrame.width - gap * CGFloat(scenario.visibleCount - 1)
+            ) / CGFloat(scenario.visibleCount)
+            for column in engine.columns(in: workspaceId) {
+                column.width = .fixed(fixedWidth)
+                column.cachedWidth = fixedWidth
+            }
+
+            let columns = engine.columns(in: workspaceId)
+            let windows = columns.compactMap(\.windowNodes.first)
+            guard windows.count >= scenario.visibleCount + 2 else {
+                Issue.record("Expected enough columns for in-strip focus-neighbor regression test")
+                return
+            }
+
+            func setSelection(activeIndex: Int) {
+                let node = windows[activeIndex]
+                controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+                    state.selectedNodeId = node.id
+                    state.activeColumnIndex = activeIndex
+                    state.viewOffsetPixels = .static(
+                        -state.columnX(at: activeIndex, columns: columns, gap: gap)
+                    )
+                }
+                _ = controller.workspaceManager.setManagedFocus(node.token, in: workspaceId, onMonitor: monitor.id)
+                _ = controller.workspaceManager.commitWorkspaceSelection(
+                    nodeId: node.id,
+                    focusedToken: node.token,
+                    in: workspaceId,
+                    onMonitor: monitor.id
+                )
+                controller.layoutRefreshController.stopAllScrollAnimations()
+            }
+
+            setSelection(activeIndex: scenario.startingActiveIndex)
+
+            controller.niriLayoutHandler.focusNeighbor(direction: .right)
+            await waitForLayoutPlanRefreshWork(on: controller)
+
+            let movedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(
+                controller.workspaceManager.preferredFocusToken(in: workspaceId)
+                    == windows[scenario.startingActiveIndex + 1].token,
+                comment
+            )
+            #expect(!movedState.viewOffsetPixels.isAnimating, comment)
+            #expect(abs(viewportStart(for: movedState, columns: columns, gap: gap)) < 0.1, comment)
+
+            controller.niriLayoutHandler.focusNeighbor(direction: .left)
+            await waitForLayoutPlanRefreshWork(on: controller)
+
+            let returnState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(
+                controller.workspaceManager.preferredFocusToken(in: workspaceId)
+                    == windows[scenario.startingActiveIndex].token,
+                comment
+            )
+            #expect(!returnState.viewOffsetPixels.isAnimating, comment)
+            #expect(abs(viewportStart(for: returnState, columns: columns, gap: gap)) < 0.1, comment)
+        }
+    }
+
+    @Test @MainActor func edgeFocusNoOpPreservesSelectionForReverseAndAbsoluteColumnCommands() async throws {
+        let controller = makeLayoutPlanTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing monitor or active workspace for edge focus no-op regression test")
+            return
+        }
+
+        controller.enableNiriLayout(
+            maxWindowsPerColumn: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        controller.updateNiriConfig(
+            maxVisibleColumns: 2,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        controller.setAnimationsEnabled(false)
+        await waitForLayoutPlanRefreshWork(on: controller)
+        controller.layoutRefreshController.stopAllScrollAnimations()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let engine = controller.niriEngine else {
+            Issue.record("Expected Niri engine for edge focus no-op regression test")
+            return
+        }
+
+        for windowId in 671 ... 673 {
+            _ = addLayoutPlanTestWindow(on: controller, workspaceId: workspaceId, windowId: windowId)
+        }
+
+        let initialPlans = try await controller.niriLayoutHandler.layoutWithNiriEngine(
+            activeWorkspaces: [workspaceId]
+        )
+        controller.layoutRefreshController.executeLayoutPlans(initialPlans)
+        await waitForLayoutPlanRefreshWork(on: controller)
+
+        let gap = CGFloat(controller.workspaceManager.gaps)
+        let workingFrame = controller.insetWorkingFrame(for: monitor)
+        let fixedWidth = (workingFrame.width - gap) / 2
+        for column in engine.columns(in: workspaceId) {
+            column.width = .fixed(fixedWidth)
+            column.cachedWidth = fixedWidth
+        }
+
+        let columns = engine.columns(in: workspaceId)
+        let windows = columns.compactMap(\.windowNodes.first)
+        guard windows.count == 3 else {
+            Issue.record("Expected three visible Niri columns for edge focus no-op regression test")
+            return
+        }
+
+        let columnStride = fixedWidth + gap
+
+        func setSelection(activeIndex: Int, visibleStartIndex: Int) {
+            let node = windows[activeIndex]
+            let expectedViewStart = CGFloat(visibleStartIndex) * columnStride
+            controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+                state.selectedNodeId = node.id
+                state.activeColumnIndex = activeIndex
+                state.viewOffsetPixels = .static(
+                    expectedViewStart
+                        - state.columnX(at: activeIndex, columns: columns, gap: gap)
+                )
+            }
+            _ = controller.workspaceManager.setManagedFocus(node.token, in: workspaceId, onMonitor: monitor.id)
+            _ = controller.workspaceManager.commitWorkspaceSelection(
+                nodeId: node.id,
+                focusedToken: node.token,
+                in: workspaceId,
+                onMonitor: monitor.id
+            )
+            controller.layoutRefreshController.stopAllScrollAnimations()
+        }
+
+        struct Scenario {
+            let label: String
+            let startIndex: Int
+            let visibleStartIndex: Int
+            let edgeDirection: Direction
+            let reverseDirection: Direction
+            let absoluteCommand: HotkeyCommand
+            let expectedAbsoluteIndex: Int
+        }
+
+        for scenario in [
+            Scenario(
+                label: "first column extra left press",
+                startIndex: 0,
+                visibleStartIndex: 0,
+                edgeDirection: .left,
+                reverseDirection: .right,
+                absoluteCommand: .focusColumnLast,
+                expectedAbsoluteIndex: 2
+            ),
+            Scenario(
+                label: "last column extra right press",
+                startIndex: 2,
+                visibleStartIndex: 1,
+                edgeDirection: .right,
+                reverseDirection: .left,
+                absoluteCommand: .focusColumnFirst,
+                expectedAbsoluteIndex: 0
+            ),
+        ] {
+            let comment = Comment(rawValue: scenario.label)
+            let expectedViewStart = CGFloat(scenario.visibleStartIndex) * columnStride
+
+            setSelection(activeIndex: scenario.startIndex, visibleStartIndex: scenario.visibleStartIndex)
+
+            #expect(controller.commandHandler.performCommand(.focus(scenario.edgeDirection)) == .executed, comment)
+            let edgeState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(
+                controller.workspaceManager.preferredFocusToken(in: workspaceId) == windows[scenario.startIndex].token,
+                comment
+            )
+            #expect(edgeState.selectedNodeId == windows[scenario.startIndex].id, comment)
+            #expect(edgeState.activeColumnIndex == scenario.startIndex, comment)
+            #expect(abs(viewportStart(for: edgeState, columns: columns, gap: gap) - expectedViewStart) < 0.1, comment)
+
+            #expect(controller.commandHandler.performCommand(.focus(scenario.reverseDirection)) == .executed, comment)
+            await waitForLayoutPlanRefreshWork(on: controller)
+
+            let reverseState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(controller.workspaceManager.preferredFocusToken(in: workspaceId) == windows[1].token, comment)
+            #expect(reverseState.selectedNodeId == windows[1].id, comment)
+            #expect(reverseState.activeColumnIndex == 1, comment)
+
+            setSelection(activeIndex: scenario.startIndex, visibleStartIndex: scenario.visibleStartIndex)
+
+            #expect(controller.commandHandler.performCommand(.focus(scenario.edgeDirection)) == .executed, comment)
+            let secondEdgeState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(
+                controller.workspaceManager.preferredFocusToken(in: workspaceId) == windows[scenario.startIndex].token,
+                comment
+            )
+            #expect(secondEdgeState.selectedNodeId == windows[scenario.startIndex].id, comment)
+            #expect(secondEdgeState.activeColumnIndex == scenario.startIndex, comment)
+            #expect(abs(viewportStart(for: secondEdgeState, columns: columns, gap: gap) - expectedViewStart) < 0.1, comment)
+
+            #expect(controller.commandHandler.performCommand(scenario.absoluteCommand) == .executed, comment)
+            await waitForLayoutPlanRefreshWork(on: controller)
+
+            let absoluteState = controller.workspaceManager.niriViewportState(for: workspaceId)
+            #expect(
+                controller.workspaceManager.preferredFocusToken(in: workspaceId) == windows[scenario.expectedAbsoluteIndex].token,
+                comment
+            )
+            #expect(absoluteState.selectedNodeId == windows[scenario.expectedAbsoluteIndex].id, comment)
+            #expect(absoluteState.activeColumnIndex == scenario.expectedAbsoluteIndex, comment)
         }
     }
 

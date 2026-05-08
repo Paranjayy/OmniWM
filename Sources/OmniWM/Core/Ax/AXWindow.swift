@@ -42,6 +42,7 @@ enum AXFrameWriteOrder {
 }
 
 enum AXFrameWriteFailureReason: Equatable, Sendable {
+    case invalidTargetFrame
     case valueCreationFailed
     case sizeWriteFailed(AXError)
     case positionWriteFailed(AXError)
@@ -240,6 +241,10 @@ enum AXWindowService {
         }
     }
 
+    static func shouldTreatAsTopLevelWindow(role: String?, subrole: String?) -> Bool {
+        role == kAXWindowRole as String || subrole == kAXStandardWindowSubrole as String
+    }
+
     static func windowId(_ window: AXWindowRef) -> Int {
         window.windowId
     }
@@ -308,6 +313,14 @@ enum AXWindowService {
             return setFrameResultProviderForTests(window, frame, currentFrameHint)
         }
 
+        guard isValidTargetFrame(frame) else {
+            return .skipped(
+                targetFrame: frame,
+                currentFrameHint: currentFrameHint,
+                failureReason: .invalidTargetFrame
+            )
+        }
+
         let writeOrder = frameWriteOrder(
             currentFrame: currentFrameHint ?? (try? self.frame(window)),
             targetFrame: frame
@@ -364,6 +377,15 @@ enum AXWindowService {
 
     private static func convertToAX(_ rect: CGRect) -> CGRect {
         ScreenCoordinateSpace.toWindowServer(rect: rect)
+    }
+
+    private static func isValidTargetFrame(_ frame: CGRect) -> Bool {
+        frame.origin.x.isFinite &&
+        frame.origin.y.isFinite &&
+        frame.width.isFinite &&
+        frame.height.isFinite &&
+        frame.width > 0 &&
+        frame.height > 0
     }
 
     static func subrole(_ window: AXWindowRef) -> String? {
@@ -529,64 +551,23 @@ enum AXWindowService {
         sizeConstraints: WindowSizeConstraints? = nil,
         overriddenWindowType: AXWindowType? = nil
     ) -> AXWindowHeuristicDisposition {
+        _ = sizeConstraints
+
         if let overriddenWindowType {
             let disposition: WindowDecisionDisposition = overriddenWindowType == .tiling ? .managed : .floating
             return AXWindowHeuristicDisposition(disposition: disposition, reasons: [])
         }
 
-        if !facts.attributeFetchSucceeded {
-            return AXWindowHeuristicDisposition(
-                disposition: .undecided,
-                reasons: [.attributeFetchFailed]
-            )
-        }
-
-        let hasAnyButton = facts.hasCloseButton
-            || facts.hasFullscreenButton
-            || facts.hasZoomButton
-            || facts.hasMinimizeButton
-
-        if facts.appPolicy == .accessory && !facts.hasCloseButton {
-            return AXWindowHeuristicDisposition(
-                disposition: .floating,
-                reasons: [.accessoryWithoutClose]
-            )
-        }
-
-        if !hasAnyButton && facts.subrole != kAXStandardWindowSubrole as String {
-            return AXWindowHeuristicDisposition(
-                disposition: .floating,
-                reasons: [.noButtonsOnNonStandardSubrole]
-            )
-        }
-
-        if let subrole = facts.subrole,
-           subrole != (kAXStandardWindowSubrole as String)
-        {
-            return AXWindowHeuristicDisposition(
-                disposition: .floating,
-                reasons: [.nonStandardSubrole]
-            )
-        }
-
-        if !facts.hasFullscreenButton {
-            return AXWindowHeuristicDisposition(
-                disposition: .floating,
-                reasons: [.missingFullscreenButton]
-            )
-        }
-
-        if facts.fullscreenButtonEnabled != true {
-            return AXWindowHeuristicDisposition(
-                disposition: .floating,
-                reasons: [.disabledFullscreenButton]
-            )
-        }
-
-        return AXWindowHeuristicDisposition(
-            disposition: .managed,
-            reasons: []
+        return solveWindowDecisionKernel(
+            matchedUserAction: nil,
+            matchedBuiltInAction: nil,
+            matchedBuiltInSourceKind: nil,
+            specialCaseKind: .none,
+            facts: facts,
+            titleRequired: false,
+            appFullscreen: false
         )
+        .heuristicDisposition
     }
 
     static func sizeConstraints(_ window: AXWindowRef, currentSize: CGSize? = nil) -> WindowSizeConstraints {

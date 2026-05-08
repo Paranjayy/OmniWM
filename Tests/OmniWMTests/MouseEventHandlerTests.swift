@@ -15,6 +15,19 @@ private func makeMouseEventTestWindow(windowId: Int = 101) -> AXWindowRef {
     AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: windowId)
 }
 
+private func makeGestureTouchSamples(
+    xPositions: [CGFloat],
+    yPosition: CGFloat = 0.5,
+    phase: NSTouch.Phase = .touching
+) -> [MouseEventHandler.GestureTouchSample] {
+    xPositions.map { xPosition in
+        MouseEventHandler.GestureTouchSample(
+            phase: phase,
+            normalizedPosition: CGPoint(x: xPosition, y: yPosition)
+        )
+    }
+}
+
 @MainActor
 private func makeOwnedUtilityTestWindow(
     frame: CGRect = CGRect(x: 40, y: 40, width: 240, height: 180)
@@ -374,6 +387,215 @@ private func prepareMouseResizeFixture(
         #expect(average == nil)
     }
 
+    @Test @MainActor func trackpadGestureDoesNotMutateNiriViewportStateOnDwindleWorkspace() async {
+        let controller = makeMouseEventTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main, layoutType: .dwindle)
+            ]
+        )
+        controller.settings.scrollGestureEnabled = true
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        controller.enableDwindleLayout()
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId)
+        else {
+            Issue.record("Missing active workspace for Dwindle gesture regression test")
+            return
+        }
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.activeColumnIndex = 2
+            state.viewOffsetPixels = .static(-321)
+            state.selectionProgress = 13
+            state.viewOffsetToRestore = 77
+            state.activatePrevColumnOnRemoval = 88
+        }
+
+        let baselineViewportState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        var relayoutReasons: [RefreshReason] = []
+
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
+            relayoutReasons.append(reason)
+            return true
+        }
+
+        #expect(baselineViewportState.viewOffsetPixels.isGesture == false)
+        #expect(Double(baselineViewportState.viewOffsetPixels.target()) == -321)
+        #expect(baselineViewportState.selectionProgress == 13)
+
+        func assertViewportMatchesBaseline(
+            _ actual: ViewportState,
+            label: String
+        ) {
+            #expect(
+                actual.activeColumnIndex == baselineViewportState.activeColumnIndex,
+                Comment(rawValue: label)
+            )
+            #expect(
+                abs(Double(actual.viewOffsetPixels.target()) - Double(baselineViewportState.viewOffsetPixels.target())) < 0.001,
+                Comment(rawValue: label)
+            )
+            #expect(
+                actual.viewOffsetPixels.isGesture == baselineViewportState.viewOffsetPixels.isGesture,
+                Comment(rawValue: label)
+            )
+            #expect(
+                actual.selectionProgress == baselineViewportState.selectionProgress,
+                Comment(rawValue: label)
+            )
+            #expect(
+                actual.viewOffsetToRestore == baselineViewportState.viewOffsetToRestore,
+                Comment(rawValue: label)
+            )
+            #expect(
+                actual.activatePrevColumnOnRemoval == baselineViewportState.activatePrevColumnOnRemoval,
+                Comment(rawValue: label)
+            )
+        }
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.20, 0.25, 0.30])
+            )
+        )
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        assertViewportMatchesBaseline(
+            controller.workspaceManager.niriViewportState(for: workspaceId),
+            label: "after began"
+        )
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.70, 0.75, 0.80])
+            )
+        )
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        assertViewportMatchesBaseline(
+            controller.workspaceManager.niriViewportState(for: workspaceId),
+            label: "after changed"
+        )
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.ended.rawValue,
+                touches: []
+            )
+        )
+
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let mutatedViewportState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        assertViewportMatchesBaseline(mutatedViewportState, label: "after ended")
+        #expect(relayoutReasons.isEmpty)
+        #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == nil)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+    }
+
+    @Test @MainActor func committedTrackpadGestureCancelsViewportWhenContextBecomesUnsupported() async {
+        let controller = makeMouseEventTestController(
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main, layoutType: .niri),
+                WorkspaceConfiguration(name: "2", monitorAssignment: .main, layoutType: .dwindle),
+            ]
+        )
+        controller.settings.scrollGestureEnabled = true
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        controller.enableDwindleLayout()
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let firstWorkspace = controller.activeWorkspace(),
+              let monitor = controller.workspaceManager.monitor(for: firstWorkspace.id)
+        else {
+            Issue.record("Missing initial workspace for gesture cleanup regression test")
+            return
+        }
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+
+        controller.workspaceManager.withNiriViewportState(for: firstWorkspace.id) { state in
+            state.viewOffsetPixels = .static(-84)
+            state.selectionProgress = 9
+            state.viewOffsetToRestore = 123
+            state.activatePrevColumnOnRemoval = 456
+        }
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.20, 0.25, 0.30])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.70, 0.75, 0.80])
+            )
+        )
+
+        let inFlightViewportState = controller.workspaceManager.niriViewportState(for: firstWorkspace.id)
+        guard let gesture = inFlightViewportState.viewOffsetPixels.gestureRef else {
+            Issue.record("Expected committed gesture state before switching to unsupported context")
+            return
+        }
+
+        let expectedOffset = gesture.currentViewOffset
+        #expect(handler.state.gesturePhase == .committed)
+        #expect(handler.state.lockedGestureContext?.workspaceId == firstWorkspace.id)
+
+        guard let switchedWorkspace = controller.workspaceManager.focusWorkspace(named: "2") else {
+            Issue.record("Failed to switch to Dwindle workspace for gesture cleanup regression test")
+            return
+        }
+        #expect(switchedWorkspace.workspace.name == "2")
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        var relayoutReasons: [RefreshReason] = []
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
+            relayoutReasons.append(reason)
+            return true
+        }
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.75, 0.80, 0.85])
+            )
+        )
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let cancelledViewportState = controller.workspaceManager.niriViewportState(for: firstWorkspace.id)
+        #expect(cancelledViewportState.viewOffsetPixels.isGesture == false)
+        #expect(cancelledViewportState.viewOffsetPixels.isAnimating == false)
+        #expect(abs(Double(cancelledViewportState.viewOffsetPixels.target()) - expectedOffset) < 0.001)
+        #expect(cancelledViewportState.selectionProgress == 0)
+        #expect(cancelledViewportState.viewOffsetToRestore == nil)
+        #expect(cancelledViewportState.activatePrevColumnOnRemoval == nil)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        #expect(relayoutReasons == [.interactiveGesture])
+    }
+
     @Test @MainActor func scrollBurstOnlyMergesWithinMatchingModifierAndPhaseGroups() {
         let controller = makeMouseEventTestController()
         let handler = controller.mouseEventHandler
@@ -562,6 +784,111 @@ private func prepareMouseResizeFixture(
 
         #expect(controller.workspaceManager.focusedHandle == fullscreenHandle)
         #expect(controller.workspaceManager.pendingFocusedHandle == nil)
+    }
+
+    @Test @MainActor func focusFollowsMouseReevaluatesAfterCrossMonitorWarp() async {
+        let primaryMonitor = makeLayoutPlanPrimaryTestMonitor(name: "Primary")
+        let secondaryMonitor = makeLayoutPlanSecondaryTestMonitor(name: "Secondary", x: 1920)
+        let controller = makeLayoutPlanTestController(
+            monitors: [primaryMonitor, secondaryMonitor],
+            workspaceConfigurations: [
+                WorkspaceConfiguration(name: "1", monitorAssignment: .main, layoutType: .niri),
+                WorkspaceConfiguration(name: "2", monitorAssignment: .secondary, layoutType: .niri)
+            ]
+        )
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+        controller.setFocusFollowsMouse(true)
+        controller.settings.mouseWarpMonitorOrder = ["Primary", "Secondary"]
+        controller.settings.mouseWarpAxis = .horizontal
+        controller.settings.mouseWarpMargin = 2
+
+        guard let primaryWorkspaceId = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
+              let secondaryWorkspaceId = controller.workspaceManager.workspaceId(for: "2", createIfMissing: false),
+              let engine = controller.niriEngine
+        else {
+            Issue.record("Missing two-monitor Niri context for cross-monitor focus-follow test")
+            return
+        }
+
+        guard controller.workspaceManager.setActiveWorkspace(primaryWorkspaceId, on: primaryMonitor.id),
+              controller.workspaceManager.setActiveWorkspace(secondaryWorkspaceId, on: secondaryMonitor.id)
+        else {
+            Issue.record("Failed to activate workspaces for cross-monitor focus-follow test")
+            return
+        }
+        _ = controller.workspaceManager.setInteractionMonitor(secondaryMonitor.id)
+
+        let firstToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 961),
+            pid: getpid(),
+            windowId: 961,
+            to: secondaryWorkspaceId
+        )
+        let secondToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 962),
+            pid: getpid(),
+            windowId: 962,
+            to: secondaryWorkspaceId
+        )
+        guard let firstHandle = controller.workspaceManager.handle(for: firstToken),
+              let secondHandle = controller.workspaceManager.handle(for: secondToken)
+        else {
+            Issue.record("Missing handles for cross-monitor focus-follow test")
+            return
+        }
+
+        let handles = controller.workspaceManager.entries(in: secondaryWorkspaceId).map(\.handle)
+        _ = engine.syncWindows(
+            handles,
+            in: secondaryWorkspaceId,
+            selectedNodeId: nil,
+            focusedHandle: secondHandle
+        )
+        _ = controller.workspaceManager.setManagedFocus(secondHandle, in: secondaryWorkspaceId, onMonitor: secondaryMonitor.id)
+        controller.layoutRefreshController.requestImmediateRelayout(reason: .workspaceTransition)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        guard let targetFrame = engine.findNode(for: firstHandle)?.frame else {
+            Issue.record("Missing seam-adjacent frame for cross-monitor focus-follow test")
+            return
+        }
+
+        var warpedPoints: [CGPoint] = []
+        controller.mouseWarpHandler.warpCursor = { point in
+            warpedPoints.append(point)
+        }
+        controller.mouseWarpHandler.postMouseMovedEvent = { point in
+            controller.mouseEventHandler.dispatchMouseMoved(
+                at: ScreenCoordinateSpace.toAppKit(point: point)
+            )
+        }
+
+        let warpLocation = CGPoint(
+            x: primaryMonitor.frame.maxX - CGFloat(controller.settings.mouseWarpMargin) + 1,
+            y: targetFrame.midY
+        )
+        controller.mouseWarpHandler.resetDebugStateForTests()
+        controller.mouseWarpHandler.receiveTapMouseWarpMoved(at: warpLocation)
+        controller.mouseWarpHandler.flushPendingWarpEventsForTests()
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let expectedWarpPoint = ScreenCoordinateSpace.toWindowServer(point: CGPoint(
+            x: secondaryMonitor.frame.minX + CGFloat(controller.settings.mouseWarpMargin) + 1,
+            y: targetFrame.midY
+        ))
+        #expect(targetFrame.contains(CGPoint(
+            x: secondaryMonitor.frame.minX + CGFloat(controller.settings.mouseWarpMargin) + 1,
+            y: targetFrame.midY
+        )))
+        #expect(warpedPoints == [expectedWarpPoint])
+        #expect(controller.workspaceManager.focusedHandle == secondHandle)
+        #expect(controller.workspaceManager.pendingFocusedHandle == firstHandle)
+        #expect(
+            controller.workspaceManager.niriViewportState(for: secondaryWorkspaceId).selectedNodeId
+                == engine.findNode(for: firstHandle)?.id
+        )
     }
 
     @Test @MainActor func focusFollowsMouseActivatesHoveredDwindleWindow() async {

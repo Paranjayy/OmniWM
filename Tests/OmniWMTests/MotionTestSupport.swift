@@ -91,6 +91,25 @@ extension NiriLayoutEngine {
         )
     }
 
+    func moveColumn(
+        _ column: NiriContainer,
+        direction: Direction,
+        in workspaceId: WorkspaceDescriptor.ID,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> Bool {
+        moveColumn(
+            column,
+            direction: direction,
+            in: workspaceId,
+            motion: .enabled,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
     func toggleColumnWidth(
         _ column: NiriContainer,
         forwards: Bool,
@@ -296,13 +315,17 @@ extension DwindleNode {
         oldFrame: CGRect,
         newFrame: CGRect,
         clock: AnimationClock?,
-        config: CubicConfig
+        config: SpringConfig = .dwindle,
+        displayRefreshRate: Double = 60.0,
+        pixelEpsilon: CGFloat = 1.0
     ) {
         animateFrom(
             oldFrame: oldFrame,
             newFrame: newFrame,
             clock: clock,
             config: config,
+            displayRefreshRate: displayRefreshRate,
+            pixelEpsilon: pixelEpsilon,
             animated: true
         )
     }

@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import QuartzCore
 
 typealias DwindleNodeId = UUID
@@ -20,14 +20,14 @@ extension Direction {
     var dwindleOrientation: DwindleOrientation {
         switch self {
         case .left, .right: .horizontal
-        case .up, .down: .vertical
+        case .down, .up: .vertical
         }
     }
 
     var isPositive: Bool {
         switch self {
         case .right, .up: true
-        case .left, .down: false
+        case .down, .left: false
         }
     }
 }
@@ -37,19 +37,47 @@ enum DwindleNodeKind {
     case leaf(handle: WindowToken?, fullscreen: Bool)
 }
 
+struct DwindleInsertionSeed {
+    let sourceFrame: CGRect
+    let orientation: DwindleOrientation
+    let appearsFirst: Bool
+
+    func startingFrame(for targetFrame: CGRect, pixelEpsilon: CGFloat) -> CGRect {
+        let pixel = max(pixelEpsilon, 0.0001)
+
+        switch orientation {
+        case .horizontal:
+            let seedX = appearsFirst ? targetFrame.maxX - pixel : targetFrame.minX
+            return CGRect(
+                x: seedX,
+                y: sourceFrame.minY,
+                width: pixel,
+                height: sourceFrame.height
+            )
+        case .vertical:
+            let seedY = appearsFirst ? targetFrame.maxY - pixel : targetFrame.minY
+            return CGRect(
+                x: sourceFrame.minX,
+                y: seedY,
+                width: sourceFrame.width,
+                height: pixel
+            )
+        }
+    }
+}
+
 final class DwindleNode {
     let id: DwindleNodeId
     weak var parent: DwindleNode?
     var children: [DwindleNode] = []
     var kind: DwindleNodeKind
     var cachedFrame: CGRect?
+    var insertionSeed: DwindleInsertionSeed?
 
-    var cachedMinSize: CGSize?
-
-    var moveXAnimation: CubicMoveAnimation?
-    var moveYAnimation: CubicMoveAnimation?
-    var sizeWAnimation: CubicMoveAnimation?
-    var sizeHAnimation: CubicMoveAnimation?
+    var moveXAnimation: MoveAnimation?
+    var moveYAnimation: MoveAnimation?
+    var sizeWAnimation: MoveAnimation?
+    var sizeHAnimation: MoveAnimation?
 
     init(kind: DwindleNodeKind) {
         id = UUID()
@@ -86,8 +114,13 @@ final class DwindleNode {
         return nil
     }
 
-    func firstChild() -> DwindleNode? { children.first }
-    func secondChild() -> DwindleNode? { children.count > 1 ? children[1] : nil }
+    func firstChild() -> DwindleNode? {
+        children.first
+    }
+
+    func secondChild() -> DwindleNode? {
+        children.count > 1 ? children[1] : nil
+    }
 
     func detach() {
         parent?.children.removeAll { $0.id == self.id }
@@ -140,7 +173,7 @@ final class DwindleNode {
     func insertBefore(_ sibling: DwindleNode) {
         guard let parent = sibling.parent,
               let index = parent.children.firstIndex(where: { $0.id == sibling.id }) else { return }
-        self.detach()
+        detach()
         self.parent = parent
         parent.children.insert(self, at: index)
     }
@@ -148,7 +181,7 @@ final class DwindleNode {
     func insertAfter(_ sibling: DwindleNode) {
         guard let parent = sibling.parent,
               let index = parent.children.firstIndex(where: { $0.id == sibling.id }) else { return }
-        self.detach()
+        detach()
         self.parent = parent
         parent.children.insert(self, at: index + 1)
     }
@@ -170,14 +203,16 @@ final class DwindleNode {
     }
 
     func collectAllWindows() -> [WindowToken] {
-        collectAllLeaves().compactMap { $0.windowToken }
+        collectAllLeaves().compactMap(\.windowToken)
     }
 
     func animateFrom(
         oldFrame: CGRect,
         newFrame: CGRect,
         clock: AnimationClock?,
-        config: CubicConfig,
+        config: SpringConfig,
+        displayRefreshRate: Double,
+        pixelEpsilon: CGFloat,
         animated: Bool
     ) {
         guard animated else {
@@ -197,58 +232,58 @@ final class DwindleNode {
         let displacementW = oldFrame.width - newFrame.width
         let displacementH = oldFrame.height - newFrame.height
 
-        if abs(displacementX) > 0.5 {
-            let normalizedVel = abs(displacementX) > 0.001 ? Double(velX / displacementX) : 0
-            let anim = CubicAnimation(
+        if abs(displacementX) > pixelEpsilon {
+            let anim = SpringAnimation(
                 from: 1.0,
                 to: 0.0,
+                initialVelocity: velX,
                 startTime: now,
-                initialVelocity: normalizedVel,
-                config: config
+                config: config,
+                displayRefreshRate: displayRefreshRate
             )
-            moveXAnimation = CubicMoveAnimation(animation: anim, fromOffset: displacementX)
+            moveXAnimation = MoveAnimation(animation: anim, fromOffset: displacementX)
         } else {
             moveXAnimation = nil
         }
 
-        if abs(displacementY) > 0.5 {
-            let normalizedVel = abs(displacementY) > 0.001 ? Double(velY / displacementY) : 0
-            let anim = CubicAnimation(
+        if abs(displacementY) > pixelEpsilon {
+            let anim = SpringAnimation(
                 from: 1.0,
                 to: 0.0,
+                initialVelocity: velY,
                 startTime: now,
-                initialVelocity: normalizedVel,
-                config: config
+                config: config,
+                displayRefreshRate: displayRefreshRate
             )
-            moveYAnimation = CubicMoveAnimation(animation: anim, fromOffset: displacementY)
+            moveYAnimation = MoveAnimation(animation: anim, fromOffset: displacementY)
         } else {
             moveYAnimation = nil
         }
 
-        if abs(displacementW) > 0.5 {
-            let normalizedVel = abs(displacementW) > 0.001 ? Double(velW / displacementW) : 0
-            let anim = CubicAnimation(
+        if abs(displacementW) > pixelEpsilon {
+            let anim = SpringAnimation(
                 from: 1.0,
                 to: 0.0,
+                initialVelocity: velW,
                 startTime: now,
-                initialVelocity: normalizedVel,
-                config: config
+                config: config,
+                displayRefreshRate: displayRefreshRate
             )
-            sizeWAnimation = CubicMoveAnimation(animation: anim, fromOffset: displacementW)
+            sizeWAnimation = MoveAnimation(animation: anim, fromOffset: displacementW)
         } else {
             sizeWAnimation = nil
         }
 
-        if abs(displacementH) > 0.5 {
-            let normalizedVel = abs(displacementH) > 0.001 ? Double(velH / displacementH) : 0
-            let anim = CubicAnimation(
+        if abs(displacementH) > pixelEpsilon {
+            let anim = SpringAnimation(
                 from: 1.0,
                 to: 0.0,
+                initialVelocity: velH,
                 startTime: now,
-                initialVelocity: normalizedVel,
-                config: config
+                config: config,
+                displayRefreshRate: displayRefreshRate
             )
-            sizeHAnimation = CubicMoveAnimation(animation: anim, fromOffset: displacementH)
+            sizeHAnimation = MoveAnimation(animation: anim, fromOffset: displacementH)
         } else {
             sizeHAnimation = nil
         }

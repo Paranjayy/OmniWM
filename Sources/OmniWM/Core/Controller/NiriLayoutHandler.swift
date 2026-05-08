@@ -23,14 +23,6 @@ private func hasPendingNiriAnimationWork(
         let gap: CGFloat
     }
 
-    struct RemovalContext {
-        var existingHandleIds: Set<WindowToken>
-        var wasEmptyBeforeSync: Bool
-        var columnRemovalResult: NiriLayoutEngine.ColumnRemovalResult?
-        var precomputedFallback: NodeId?
-        var originalColumnIndex: Int?
-    }
-
     var scrollAnimationByDisplay: [CGDirectDisplayID: WorkspaceDescriptor.ID] = [:]
 
     init(controller: WMController?) {
@@ -76,7 +68,6 @@ private func hasPendingNiriAnimationWork(
 
         let windowAnimationsRunning = engine.tickAllWindowAnimations(in: wsId, at: targetTime)
         let columnAnimationsRunning = engine.tickAllColumnAnimations(in: wsId, at: targetTime)
-        let workspaceSwitchRunning = engine.tickWorkspaceSwitchAnimation(for: wsId, at: targetTime)
 
         controller.workspaceManager.withNiriViewportState(for: wsId) { state in
             let viewportAnimationRunning = state.advanceAnimations(at: targetTime)
@@ -92,7 +83,6 @@ private func hasPendingNiriAnimationWork(
             let animationsOngoing = viewportAnimationRunning
                 || windowAnimationsRunning
                 || columnAnimationsRunning
-                || workspaceSwitchRunning
 
             if !animationsOngoing {
                 self.finalizeAnimation()
@@ -158,7 +148,10 @@ private func hasPendingNiriAnimationWork(
                 policy: .coordinated
             )
         } else {
-            _ = controller.renderKeyboardFocusBorder(policy: .coordinated)
+            _ = controller.renderKeyboardFocusBorder(
+                policy: .coordinated,
+                source: .borderReapplyAnimationSettled
+            )
         }
 
         if controller.moveMouseToFocusedWindowEnabled,
@@ -295,6 +288,7 @@ private func hasPendingNiriAnimationWork(
             workingArea: area,
             animationTime: animationTime
         )
+        recordManagedRestoreGeometry(windows: snapshot.windows, frames: frames)
 
         let diff = layoutDiff(
             windows: snapshot.windows,
@@ -324,7 +318,12 @@ private func hasPendingNiriAnimationWork(
         engine: NiriLayoutEngine,
         monitor: Monitor
     ) -> WorkspaceLayoutPlan {
-        let motion = controller?.motionPolicy.snapshot() ?? .enabled
+        let hasNativeFullscreenRestoreCycle = snapshot.windows.contains {
+            $0.isRestoringNativeFullscreen
+        }
+        let motion = hasNativeFullscreenRestoreCycle
+            ? .disabled
+            : (controller?.motionPolicy.snapshot() ?? .enabled)
         var state = snapshot.viewportState
         let pass = NiriLayoutPass(
             wsId: snapshot.workspaceId,
@@ -333,336 +332,147 @@ private func hasPendingNiriAnimationWork(
             insetFrame: snapshot.monitor.workingFrame,
             gap: snapshot.gap
         )
-        let windowTokens = snapshot.windows.map(\.token)
-        let currentSelection = state.selectedNodeId
-
-        let removal = processWindowRemovals(
-            pass: pass,
-            motion: motion,
-            state: &state,
-            windowTokens: windowTokens,
-            currentSelection: currentSelection,
-            removedNodeIds: snapshot.removalSeed?.removedNodeIds ?? []
+        if hasNativeFullscreenRestoreCycle {
+            suppressAnimationsForNativeFullscreenRestore(pass: pass, state: &state)
+        }
+        let restoreContexts = resolvedNativeFullscreenRestoreContexts(
+            for: snapshot.windows,
+            workspaceId: snapshot.workspaceId
         )
-
-        let newTokens = syncAndInsert(
+        let topologySync = syncTopology(
             pass: pass,
             motion: motion,
             state: &state,
-            windowTokens: windowTokens,
-            removal: removal,
-            preferredFocusToken: snapshot.preferredFocusToken
+            snapshot: snapshot
         )
 
         for window in snapshot.windows {
             engine.updateWindowConstraints(for: window.token, constraints: window.constraints)
         }
 
-        let selection = resolveSelection(
-            pass: pass,
-            motion: motion,
-            state: &state,
-            windowTokens: windowTokens,
-            removal: removal,
-            snapshot: snapshot
-        )
-
-        let arrival = handleNewWindowArrival(
-            pass: pass,
-            motion: motion,
-            state: &state,
-            newTokens: newTokens,
-            existingHandleIds: removal.existingHandleIds,
-            snapshot: snapshot
+        applyNativeFullscreenNiriState(
+            restoreContexts,
+            in: engine
         )
 
         return computeLayoutPlan(
             pass: pass,
             motion: motion,
             state: state,
-            rememberedFocusToken: arrival.rememberedFocusToken ?? selection.rememberedFocusToken,
-            newWindowToken: arrival.newWindowToken,
-            viewportNeedsRecalc: selection.viewportNeedsRecalc,
-            snapshot: snapshot
+            rememberedFocusToken: topologySync.rememberedFocusToken,
+            newWindowToken: topologySync.newWindowToken,
+            viewportNeedsRecalc: topologySync.viewportNeedsRecalc,
+            snapshot: snapshot,
+            restoreContexts: restoreContexts,
+            suppressAnimationDirectives: hasNativeFullscreenRestoreCycle
         )
     }
 
-    private func processWindowRemovals(
-        pass: NiriLayoutPass,
-        motion: MotionSnapshot,
-        state: inout ViewportState,
-        windowTokens: [WindowToken],
-        currentSelection: NodeId?,
-        removedNodeIds: [NodeId]
-    ) -> RemovalContext {
-        let existingHandleIds = pass.engine.root(for: pass.wsId)?.windowIdSet ?? []
-        let currentHandleIds = Set(windowTokens)
-        let removedHandleIds = existingHandleIds.subtracting(currentHandleIds)
-        let removedNodeIdSet = Set(removedNodeIds)
-
-        var precomputedFallback: NodeId?
-        var originalColumnIndex: Int?
-        var columnRemovalResult: NiriLayoutEngine.ColumnRemovalResult?
-
-        let wasEmptyBeforeSync = pass.engine.columns(in: pass.wsId).isEmpty
-
-        for removedHandleId in removedHandleIds {
-            guard let window = pass.engine.findNode(for: removedHandleId),
-                  let col = pass.engine.column(of: window),
-                  let colIdx = pass.engine.columnIndex(of: col, in: pass.wsId) else { continue }
-
-            let allWindowsInColumnRemoved = col.windowNodes.allSatisfy { w in
-                !currentHandleIds.contains(w.token)
-            }
-
-            if allWindowsInColumnRemoved && columnRemovalResult == nil {
-                originalColumnIndex = colIdx
-                columnRemovalResult = pass.engine.animateColumnsForRemoval(
-                    columnIndex: colIdx,
-                    in: pass.wsId,
-                    motion: motion,
-                    state: &state,
-                    gaps: pass.gap
-                )
-            }
-
-            let shouldPrecomputeFallback = if removedNodeIdSet.isEmpty {
-                window.id == currentSelection
-            } else {
-                removedNodeIdSet.contains(window.id)
-            }
-            if shouldPrecomputeFallback {
-                precomputedFallback = pass.engine.fallbackSelectionOnRemoval(
-                    removing: window.id,
-                    in: pass.wsId
-                )
-            }
-        }
-
-        return RemovalContext(
-            existingHandleIds: existingHandleIds,
-            wasEmptyBeforeSync: wasEmptyBeforeSync,
-            columnRemovalResult: columnRemovalResult,
-            precomputedFallback: precomputedFallback,
-            originalColumnIndex: originalColumnIndex
-        )
-    }
-
-    private func syncAndInsert(
-        pass: NiriLayoutPass,
-        motion: MotionSnapshot,
-        state: inout ViewportState,
-        windowTokens: [WindowToken],
-        removal: RemovalContext,
-        preferredFocusToken: WindowToken?
-    ) -> [WindowToken] {
-        let currentSelection = state.selectedNodeId
-        _ = pass.engine.syncWindows(
-            windowTokens,
-            in: pass.wsId,
-            selectedNodeId: currentSelection,
-            focusedToken: preferredFocusToken
-        )
-        let newTokens = windowTokens.filter { !removal.existingHandleIds.contains($0) }
-
-        for col in pass.engine.columns(in: pass.wsId) {
-            if col.cachedWidth <= 0 {
-                col.resolveAndCacheWidth(workingAreaWidth: pass.insetFrame.width, gaps: pass.gap)
-            }
-        }
-
-        if !removal.wasEmptyBeforeSync, !newTokens.isEmpty {
-            var newColumnData: [(col: NiriContainer, colIdx: Int)] = []
-            for newToken in newTokens {
-                if let node = pass.engine.findNode(for: newToken),
-                   let col = pass.engine.column(of: node),
-                   let colIdx = pass.engine.columnIndex(of: col, in: pass.wsId)
-                {
-                    if !newColumnData.contains(where: { $0.col.id == col.id }) {
-                        newColumnData.append((col, colIdx))
-                    }
-                }
-            }
-
-            let originalActiveIdx = state.activeColumnIndex
-            let insertedBeforeActive = newColumnData.filter { $0.colIdx <= originalActiveIdx }
-            if !insertedBeforeActive.isEmpty, removal.columnRemovalResult == nil {
-                let totalInsertedWidth = insertedBeforeActive.reduce(CGFloat(0)) { total, data in
-                    total + data.col.cachedWidth + pass.gap
-                }
-                state.viewOffsetPixels.offset(delta: Double(-totalInsertedWidth))
-                state.activeColumnIndex = originalActiveIdx + insertedBeforeActive.count
-            }
-
-            let sortedNewColumns = newColumnData.sorted { $0.colIdx < $1.colIdx }
-            for addedData in sortedNewColumns {
-                pass.engine.animateColumnsForAddition(
-                    columnIndex: addedData.colIdx,
-                    in: pass.wsId,
-                    motion: motion,
-                    state: state,
-                    gaps: pass.gap,
-                    workingAreaWidth: pass.insetFrame.width
-                )
-            }
-        }
-
-        return newTokens
-    }
-
-    private func resolveSelection(
-        pass: NiriLayoutPass,
-        motion: MotionSnapshot,
-        state: inout ViewportState,
-        windowTokens: [WindowToken],
-        removal: RemovalContext,
-        snapshot: NiriWorkspaceSnapshot
-    ) -> (viewportNeedsRecalc: Bool, rememberedFocusToken: WindowToken?) {
-        state.displayRefreshRate = snapshot.displayRefreshRate
-
-        if let result = removal.columnRemovalResult {
-            if let prevOffset = state.activatePrevColumnOnRemoval {
-                state.viewOffsetPixels = .static(prevOffset)
-                state.activatePrevColumnOnRemoval = nil
-            }
-
-            if let fallback = result.fallbackSelectionId {
-                state.selectedNodeId = fallback
-            } else if let selectedId = state.selectedNodeId, pass.engine.findNode(by: selectedId) == nil {
-                state.selectedNodeId = removal.precomputedFallback
-                    ?? pass.engine.validateSelection(selectedId, in: pass.wsId)
-            }
-        } else {
-            if let selectedId = state.selectedNodeId {
-                if pass.engine.findNode(by: selectedId) == nil {
-                    state.selectedNodeId = removal.precomputedFallback
-                        ?? pass.engine.validateSelection(selectedId, in: pass.wsId)
-                }
-            }
-        }
-
-        if state.selectedNodeId == nil {
-            if let firstToken = windowTokens.first,
-               let firstNode = pass.engine.findNode(for: firstToken)
-            {
-                state.selectedNodeId = firstNode.id
-            }
-        }
-
-        let usesSingleWindowAspectRatio = pass.engine.singleWindowLayoutContext(in: pass.wsId) != nil
-        if usesSingleWindowAspectRatio {
-            resetViewportForSingleWindowAspectRatio(state: &state)
-        }
-
-        let offsetBefore = state.viewOffsetPixels.current()
-        var viewportNeedsRecalc = false
-
-        let isGestureOrAnimation = state.viewOffsetPixels.isGesture || state.viewOffsetPixels.isAnimating
-
-        for col in pass.engine.columns(in: pass.wsId) {
-            if col.cachedWidth <= 0 {
-                col.resolveAndCacheWidth(workingAreaWidth: pass.insetFrame.width, gaps: pass.gap)
-            }
-        }
-
-        if !usesSingleWindowAspectRatio,
-           !isGestureOrAnimation,
-           snapshot.isActiveWorkspace,
-           let selectedId = state.selectedNodeId,
-           let selectedNode = pass.engine.findNode(by: selectedId)
-        {
-            if let restoreOffset = removal.columnRemovalResult?.restorePreviousViewOffset {
-                state.viewOffsetPixels = .static(restoreOffset)
-            } else {
-                pass.engine.ensureSelectionVisible(
-                    node: selectedNode,
-                    in: pass.wsId,
-                    motion: motion,
-                    state: &state,
-                    workingFrame: pass.insetFrame,
-                    gaps: pass.gap,
-                    fromContainerIndex: removal.originalColumnIndex
-                )
-            }
-            if abs(state.viewOffsetPixels.current() - offsetBefore) > 1 {
-                viewportNeedsRecalc = true
-            }
-        }
-
-        let rememberedFocusToken: WindowToken?
-        if let selectedId = state.selectedNodeId,
-           let selectedNode = pass.engine.findNode(by: selectedId) as? NiriWindow
-        {
-            rememberedFocusToken = selectedNode.token
-        } else {
-            rememberedFocusToken = nil
-        }
-
-        return (viewportNeedsRecalc, rememberedFocusToken)
-    }
-
-    private func handleNewWindowArrival(
-        pass: NiriLayoutPass,
-        motion: MotionSnapshot,
-        state: inout ViewportState,
-        newTokens: [WindowToken],
-        existingHandleIds: Set<WindowToken>,
-        snapshot: NiriWorkspaceSnapshot
-    ) -> (newWindowToken: WindowToken?, rememberedFocusToken: WindowToken?) {
-        let wasEmpty = existingHandleIds.isEmpty
-
-        var newWindowToken: WindowToken?
+    private struct TopologySyncResult {
+        var viewportNeedsRecalc: Bool
         var rememberedFocusToken: WindowToken?
-        if snapshot.hasCompletedInitialRefresh,
-           let newToken = newTokens.last,
-           let newNode = pass.engine.findNode(for: newToken),
-           snapshot.isActiveWorkspace
-        {
-            state.selectedNodeId = newNode.id
+        var newWindowToken: WindowToken?
+    }
 
-            if wasEmpty {
-                if pass.engine.singleWindowLayoutContext(in: pass.wsId) != nil {
-                    resetViewportForSingleWindowAspectRatio(state: &state)
-                } else {
-                    let cols = pass.engine.columns(in: pass.wsId)
-                    let settings = pass.engine.effectiveSettings(in: pass.wsId)
-                    state.transitionToColumn(
-                        0,
-                        columns: cols,
-                        gap: pass.gap,
-                        viewportWidth: pass.insetFrame.width,
-                        motion: motion,
-                        animate: false,
-                        centerMode: settings.centerFocusedColumn,
-                        alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn
-                    )
-                }
-            } else if let newCol = pass.engine.column(of: newNode),
-                      let newColIdx = pass.engine.columnIndex(of: newCol, in: pass.wsId) {
-                if newCol.cachedWidth <= 0 {
-                    newCol.resolveAndCacheWidth(workingAreaWidth: pass.insetFrame.width, gaps: pass.gap)
-                }
+    private func syncTopology(
+        pass: NiriLayoutPass,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        snapshot: NiriWorkspaceSnapshot
+    ) -> TopologySyncResult {
+        state.displayRefreshRate = snapshot.displayRefreshRate
+        let windowTokens = snapshot.windows.map(\.token)
+        let existingHandleIds = pass.engine.root(for: pass.wsId)?.windowIdSet ?? []
+        let newTokens = windowTokens.filter { !existingHandleIds.contains($0) }
+        let offsetBefore = state.viewOffsetPixels.current()
 
-                let shouldRestorePrevOffset = newColIdx == state.activeColumnIndex + 1
-                let offsetBeforeActivation = state.stationary()
-
-                pass.engine.ensureSelectionVisible(
-                    node: newNode,
-                    in: pass.wsId,
-                    motion: motion,
-                    state: &state,
-                    workingFrame: pass.insetFrame,
-                    gaps: pass.gap,
-                    fromContainerIndex: state.activeColumnIndex
-                )
-
-                if shouldRestorePrevOffset {
-                    state.activatePrevColumnOnRemoval = offsetBeforeActivation
-                }
+        for col in pass.engine.columns(in: pass.wsId) {
+            if col.cachedWidth <= 0 {
+                col.resolveAndCacheWidth(workingAreaWidth: pass.insetFrame.width, gaps: pass.gap)
             }
-            rememberedFocusToken = newToken
-            pass.engine.updateFocusTimestamp(for: newNode.id)
-            newWindowToken = newToken
+        }
+
+        let resetForSingleWindow = windowTokens.count == 1
+            && pass.engine.effectiveSingleWindowAspectRatio(in: pass.wsId).ratio != nil
+        guard let plan = pass.engine.callTopologyKernel(
+            operation: .syncWindows,
+            workspaceId: pass.wsId,
+            state: state,
+            workingFrame: pass.insetFrame,
+            gaps: pass.gap,
+            focusedToken: snapshot.preferredFocusToken,
+            desiredTokens: windowTokens,
+            removedNodeIds: snapshot.removalSeed?.removedNodeIds ?? [],
+            resetForSingleWindow: resetForSingleWindow,
+            motion: motion,
+            isActiveWorkspace: snapshot.isActiveWorkspace,
+            hasCompletedInitialRefresh: snapshot.hasCompletedInitialRefresh
+        ) else {
+            return TopologySyncResult(
+                viewportNeedsRecalc: false,
+                rememberedFocusToken: nil,
+                newWindowToken: nil
+            )
+        }
+
+        if plan.effectKind == .removeColumn,
+           plan.result.source_column_index >= 0
+        {
+            var animationState = state
+            _ = pass.engine.animateColumnsForRemoval(
+                columnIndex: Int(plan.result.source_column_index),
+                in: pass.wsId,
+                motion: motion,
+                state: &animationState,
+                gaps: pass.gap
+            )
+        }
+
+        _ = pass.engine.applyTopologyPlan(
+            plan,
+            in: pass.wsId,
+            state: &state,
+            motion: motion
+        )
+
+        for col in pass.engine.columns(in: pass.wsId) {
+            if col.cachedWidth <= 0 {
+                col.resolveAndCacheWidth(workingAreaWidth: pass.insetFrame.width, gaps: pass.gap)
+            }
+        }
+
+        if !existingHandleIds.isEmpty,
+           plan.effectKind == .addColumn,
+           plan.result.target_column_index >= 0
+        {
+            pass.engine.animateColumnsForAddition(
+                columnIndex: Int(plan.result.target_column_index),
+                in: pass.wsId,
+                motion: motion,
+                state: state,
+                gaps: pass.gap,
+                workingAreaWidth: pass.insetFrame.width
+            )
+        }
+
+        let selectedToken = state.selectedNodeId
+            .flatMap { pass.engine.findNode(by: $0) as? NiriWindow }?
+            .token
+        let rememberedFocusToken: WindowToken? = if plan.result.remembered_focus_window_id != 0 {
+            pass.engine.findWindow(in: plan, id: plan.result.remembered_focus_window_id)?.token
+        } else {
+            selectedToken
+        }
+        let newWindowToken: WindowToken? = if snapshot.hasCompletedInitialRefresh,
+                                              snapshot.isActiveWorkspace,
+                                              plan.result.new_window_id != 0
+        {
+            pass.engine.findWindow(in: plan, id: plan.result.new_window_id)?.token
+        } else {
+            nil
+        }
+        if let selectedId = state.selectedNodeId {
+            pass.engine.updateFocusTimestamp(for: selectedId)
         }
 
         if snapshot.hasCompletedInitialRefresh,
@@ -688,15 +498,11 @@ private func hasPendingNiriAnimationWork(
             }
         }
 
-        return (newWindowToken, rememberedFocusToken)
-    }
-
-    private func resetViewportForSingleWindowAspectRatio(state: inout ViewportState) {
-        state.activeColumnIndex = 0
-        state.viewOffsetPixels = .static(0)
-        state.activatePrevColumnOnRemoval = nil
-        state.viewOffsetToRestore = nil
-        state.selectionProgress = 0
+        return TopologySyncResult(
+            viewportNeedsRecalc: abs(state.viewOffsetPixels.current() - offsetBefore) > 1,
+            rememberedFocusToken: rememberedFocusToken,
+            newWindowToken: newWindowToken
+        )
     }
 
     private func computeLayoutPlan(
@@ -706,7 +512,9 @@ private func hasPendingNiriAnimationWork(
         rememberedFocusToken: WindowToken?,
         newWindowToken: WindowToken?,
         viewportNeedsRecalc: Bool,
-        snapshot: NiriWorkspaceSnapshot
+        snapshot: NiriWorkspaceSnapshot,
+        restoreContexts: [WindowToken: NativeFullscreenRestoreContext] = [:],
+        suppressAnimationDirectives: Bool = false
     ) -> WorkspaceLayoutPlan {
         let gaps = LayoutGaps(
             horizontal: pass.gap,
@@ -729,10 +537,16 @@ private func hasPendingNiriAnimationWork(
             animationTime: nil
         )
 
-        let hasColumnAnimations = pass.engine.hasAnyColumnAnimationsRunning(in: pass.wsId)
+        let restoreFrameOverrides = restoreContexts.compactMapValues(\.restoreFrame)
+        let resolvedFrames = frames.merging(restoreFrameOverrides) { _, restoreFrame in restoreFrame }
+        recordManagedRestoreGeometry(windows: snapshot.windows, frames: resolvedFrames)
+
+        let hasColumnAnimations = suppressAnimationDirectives
+            ? false
+            : pass.engine.hasAnyColumnAnimationsRunning(in: pass.wsId)
         var directives: [AnimationDirective] = []
 
-        if !snapshot.useScrollAnimationPath {
+        if !snapshot.useScrollAnimationPath && !suppressAnimationDirectives {
             if viewportNeedsRecalc, newWindowToken == nil {
                 directives.append(.startNiriScroll(workspaceId: pass.wsId))
             } else if hasColumnAnimations {
@@ -740,12 +554,15 @@ private func hasPendingNiriAnimationWork(
             }
         }
 
-        if let newWindowToken {
+        if let newWindowToken, !suppressAnimationDirectives {
             directives.append(.startNiriScroll(workspaceId: pass.wsId))
             directives.append(.activateWindow(token: newWindowToken))
         }
 
-        if let removalSeed = snapshot.removalSeed, !removalSeed.oldFrames.isEmpty {
+        if let removalSeed = snapshot.removalSeed,
+           !removalSeed.oldFrames.isEmpty,
+           !suppressAnimationDirectives
+        {
             let newFrames = pass.engine.captureWindowFrames(in: pass.wsId)
             let animationsTriggered = pass.engine.triggerMoveAnimations(
                 in: pass.wsId,
@@ -762,7 +579,7 @@ private func hasPendingNiriAnimationWork(
 
         let diff = layoutDiff(
             windows: snapshot.windows,
-            frames: frames,
+            frames: resolvedFrames,
             hiddenHandles: hiddenHandles,
             confirmedFocusedToken: snapshot.confirmedFocusedToken,
             pendingFocusedToken: snapshot.pendingFocusedToken,
@@ -772,10 +589,11 @@ private func hasPendingNiriAnimationWork(
             engine: pass.engine,
             directBorderUpdate: snapshot.useScrollAnimationPath,
             isInteractionWorkspace: snapshot.isInteractionWorkspace,
-            canRestoreHiddenWorkspaceWindows: snapshot.isActiveWorkspace
+            canRestoreHiddenWorkspaceWindows: snapshot.isActiveWorkspace,
+            forceHiddenReapply: snapshot.windows.contains { $0.isRestoringNativeFullscreen }
         )
 
-        return WorkspaceLayoutPlan(
+        var plan = WorkspaceLayoutPlan(
             workspaceId: pass.wsId,
             monitor: snapshot.monitor,
             sessionPatch: WorkspaceSessionPatch(
@@ -786,6 +604,11 @@ private func hasPendingNiriAnimationWork(
             diff: diff,
             animationDirectives: directives
         )
+        plan.nativeFullscreenRestoreFinalizeTokens = nativeFullscreenRestoreFinalizeTokens(
+            windows: snapshot.windows,
+            frames: resolvedFrames
+        )
+        return plan
     }
 
     private func layoutDiff(
@@ -800,7 +623,8 @@ private func hasPendingNiriAnimationWork(
         engine: NiriLayoutEngine,
         directBorderUpdate: Bool,
         isInteractionWorkspace: Bool,
-        canRestoreHiddenWorkspaceWindows: Bool
+        canRestoreHiddenWorkspaceWindows: Bool,
+        forceHiddenReapply: Bool = false
     ) -> WorkspaceLayoutDiff {
         var diff = WorkspaceLayoutDiff()
         let suspendedTokens = Set(
@@ -839,8 +663,19 @@ private func hasPendingNiriAnimationWork(
             }
             let previousOffscreenSide = window.hiddenState?.offscreenSide
             if let side = hiddenHandles[token] {
-                if previousOffscreenSide != side {
-                    diff.visibilityChanges.append(.hide(token, side: side))
+                guard let hiddenFrame = frames[token] else { continue }
+                let request = LayoutHideRequest(
+                    token: token,
+                    side: side,
+                    hiddenFrame: hiddenFrame
+                )
+                let roundedOrigin = controller?
+                    .layoutRefreshController
+                    .hiddenOriginForComparison(request.hiddenFrame.origin, token: token)
+                    ?? request.hiddenFrame.origin
+                let lastAppliedOrigin = controller?.layoutRefreshController.lastVerifiedHideOrigin(for: token)
+                if forceHiddenReapply || lastAppliedOrigin != roundedOrigin {
+                    diff.visibilityChanges.append(.hide(request))
                 }
                 continue
             }
@@ -860,9 +695,9 @@ private func hasPendingNiriAnimationWork(
 
             guard let frame = frames[token] else { continue }
             let forceApply = if let node = engine.findNode(for: token) {
-                node.sizingMode == .fullscreen
+                window.isRestoringNativeFullscreen || node.sizingMode == .fullscreen
             } else {
-                false
+                window.isRestoringNativeFullscreen
             }
             diff.frameChanges.append(
                 LayoutFrameChange(
@@ -887,6 +722,17 @@ private func hasPendingNiriAnimationWork(
         }
 
         return diff
+    }
+
+    private func recordManagedRestoreGeometry(
+        windows: [LayoutWindowSnapshot],
+        frames: [WindowToken: CGRect]
+    ) {
+        guard let controller else { return }
+        for window in windows where !window.isNativeFullscreenSuspended {
+            guard let frame = frames[window.token] else { continue }
+            controller.recordManagedRestoreGeometry(for: window.token, frame: frame)
+        }
     }
 
     func updateTabbedColumnOverlays() {
@@ -1146,13 +992,16 @@ private func hasPendingNiriAnimationWork(
             controller.workspaceManager.workspaces.compactMap { workspace in
                 guard let monitor = controller.workspaceManager.monitor(for: workspace.id) else { return nil }
                 return (workspaceId: workspace.id, monitor: monitor)
-            }
+        }
         engine.syncWorkspaceAssignments(workspaceAssignments)
 
-        for monitor in currentMonitors {
-            if let niriMonitor = engine.monitor(for: monitor.id) {
-                niriMonitor.animationClock = controller.animationClock
-            }
+        refreshResolvedMonitorSettings()
+    }
+
+    func refreshResolvedMonitorSettings() {
+        guard let controller, let engine = controller.niriEngine else { return }
+
+        for monitor in controller.workspaceManager.monitors {
             let resolved = controller.settings.resolvedNiriSettings(for: monitor)
             engine.updateMonitorSettings(resolved, for: monitor.id)
         }
@@ -1179,6 +1028,7 @@ private func hasPendingNiriAnimationWork(
             presetColumnWidths: columnWidthPresets?.map { .proportion($0) },
             defaultColumnWidth: defaultColumnWidth.map { $0.map { CGFloat($0) } }
         )
+        refreshResolvedMonitorSettings()
         controller.layoutRefreshController.requestRelayout(reason: .layoutConfigChanged)
     }
 
@@ -1369,6 +1219,121 @@ private func hasPendingNiriAnimationWork(
             )
         }
         return didMove
+    }
+}
+
+private extension NiriLayoutHandler {
+    func suppressAnimationsForNativeFullscreenRestore(
+        pass: NiriLayoutPass,
+        state: inout ViewportState
+    ) {
+        if let controller {
+            let displayIds = scrollAnimationByDisplay.compactMap { displayId, workspaceId in
+                workspaceId == pass.wsId ? displayId : nil
+            }
+            for displayId in displayIds {
+                controller.layoutRefreshController.stopScrollAnimation(for: displayId)
+            }
+        }
+
+        state.cancelAnimation()
+
+        for column in pass.engine.columns(in: pass.wsId) {
+            column.moveAnimation = nil
+            column.widthAnimation = nil
+            column.targetWidth = nil
+        }
+
+        if let root = pass.engine.root(for: pass.wsId) {
+            for window in root.allWindows {
+                window.stopMoveAnimations()
+            }
+        }
+    }
+
+    func resolvedNativeFullscreenRestoreContexts(
+        for windows: [LayoutWindowSnapshot],
+        workspaceId: WorkspaceDescriptor.ID
+    ) -> [WindowToken: NativeFullscreenRestoreContext] {
+        guard let topologyProfile = controller?.workspaceManager.topologyProfile else { return [:] }
+
+        var restoreContexts: [WindowToken: NativeFullscreenRestoreContext] = [:]
+        for window in windows {
+            guard let restoreContext = window.nativeFullscreenRestore,
+                  restoreContext.currentToken == window.token,
+                  restoreContext.workspaceId == workspaceId,
+                  restoreContext.capturedTopologyProfile == topologyProfile,
+                  restoreContext.restoreFrame != nil
+            else {
+                continue
+            }
+            restoreContexts[window.token] = restoreContext
+        }
+        return restoreContexts
+    }
+
+    func applyNativeFullscreenNiriState(
+        _ restoreContexts: [WindowToken: NativeFullscreenRestoreContext],
+        in engine: NiriLayoutEngine
+    ) {
+        for (token, restoreContext) in restoreContexts {
+            applyNativeFullscreenNiriState(
+                restoreContext.niriState,
+                for: token,
+                in: engine
+            )
+        }
+    }
+
+    func applyNativeFullscreenNiriState(
+        _ niriState: ManagedWindowRestoreSnapshot.NiriState?,
+        for token: WindowToken,
+        in engine: NiriLayoutEngine
+    ) {
+        guard let niriState,
+              let window = engine.findNode(for: token)
+        else {
+            return
+        }
+
+        if let column = engine.column(of: window) {
+            let sizing = niriState.columnSizing
+            column.widthAnimation = nil
+            column.targetWidth = nil
+            column.width = sizing.width
+            column.cachedWidth = sizing.cachedWidth
+            column.presetWidthIdx = sizing.presetWidthIdx
+            column.isFullWidth = sizing.isFullWidth
+            column.savedWidth = sizing.savedWidth
+            column.hasManualSingleWindowWidthOverride = sizing.hasManualSingleWindowWidthOverride
+            column.height = sizing.height
+            column.cachedHeight = sizing.cachedHeight
+            column.isFullHeight = sizing.isFullHeight
+            column.savedHeight = sizing.savedHeight
+        }
+
+        let sizing = niriState.windowSizing
+        window.height = sizing.height
+        window.savedHeight = sizing.savedHeight
+        window.windowWidth = sizing.windowWidth
+        window.sizingMode = sizing.sizingMode
+        window.resolvedHeight = nil
+        window.resolvedWidth = nil
+        window.stopMoveAnimations()
+    }
+
+    func nativeFullscreenRestoreFinalizeTokens(
+        windows: [LayoutWindowSnapshot],
+        frames _: [WindowToken: CGRect]
+    ) -> [WindowToken] {
+        return windows.compactMap { window in
+            guard window.isRestoringNativeFullscreen,
+                  window.restoreFrame != nil
+            else {
+                return nil
+            }
+            return window.token
+        }
     }
 }
 

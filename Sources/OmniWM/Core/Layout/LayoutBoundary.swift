@@ -6,10 +6,29 @@ struct LayoutWindowSnapshot {
     let constraints: WindowSizeConstraints
     let hiddenState: WindowModel.HiddenState?
     let layoutReason: LayoutReason
+    let nativeFullscreenRestore: NativeFullscreenRestoreContext?
 
     var isNativeFullscreenSuspended: Bool {
         layoutReason == .nativeFullscreen
     }
+
+    var isRestoringNativeFullscreen: Bool {
+        nativeFullscreenRestore != nil
+    }
+
+    var restoreFrame: CGRect? {
+        nativeFullscreenRestore?.restoreFrame
+    }
+}
+
+struct NativeFullscreenRestoreContext: Equatable {
+    let originalToken: WindowToken
+    let currentToken: WindowToken
+    let workspaceId: WorkspaceDescriptor.ID
+    let restoreFrame: CGRect?
+    let capturedTopologyProfile: TopologyProfile?
+    let niriState: ManagedWindowRestoreSnapshot.NiriState?
+    let replacementMetadata: ManagedReplacementMetadata?
 }
 
 struct LayoutMonitorSnapshot {
@@ -62,6 +81,7 @@ struct DwindleWorkspaceSnapshot {
     let confirmedFocusedToken: WindowToken?
     let selectedToken: WindowToken?
     let settings: ResolvedDwindleSettings
+    let displayRefreshRate: Double
     let isActiveWorkspace: Bool
 }
 
@@ -76,9 +96,15 @@ struct LayoutRestoreChange {
     let hiddenState: WindowModel.HiddenState
 }
 
+struct LayoutHideRequest {
+    let token: WindowToken
+    let side: HideSide
+    let hiddenFrame: CGRect
+}
+
 enum LayoutVisibilityChange {
     case show(WindowToken)
-    case hide(WindowToken, side: HideSide)
+    case hide(LayoutHideRequest)
 }
 
 struct LayoutFocusedFrame {
@@ -131,6 +157,7 @@ struct RefreshExecutionEffects {
     var updateTabbedOverlays: Bool = false
     var refreshFocusedBorderForVisibilityState: Bool = false
     var focusValidationWorkspaceIds: [WorkspaceDescriptor.ID] = []
+    var nativeFullscreenRestoreWorkspaceIds: [WorkspaceDescriptor.ID] = []
     var markInitialRefreshComplete: Bool = false
     var drainDeferredCreatedWindows: Bool = false
     var subscribeManagedWindows: Bool = false
@@ -142,6 +169,7 @@ struct WorkspaceLayoutPlan {
     var sessionPatch: WorkspaceSessionPatch
     var diff: WorkspaceLayoutDiff
     var animationDirectives: [AnimationDirective] = []
+    var nativeFullscreenRestoreFinalizeTokens: [WindowToken] = []
 }
 
 typealias RefreshPostLayoutAction = @MainActor () -> Void

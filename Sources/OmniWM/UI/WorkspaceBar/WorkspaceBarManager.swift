@@ -361,11 +361,32 @@ final class WorkspaceBarManager {
             projection: resolved.projectionOptions
         ) ?? []
 
+        let accentColorComponents: ColorComponents? = resolved.accentColorRed >= 0
+            ? ColorComponents(
+                red: resolved.accentColorRed,
+                green: resolved.accentColorGreen,
+                blue: resolved.accentColorBlue,
+                alpha: resolved.accentColorAlpha
+            )
+            : nil
+
+        let textColorComponents: ColorComponents? = resolved.textColorRed >= 0
+            ? ColorComponents(
+                red: resolved.textColorRed,
+                green: resolved.textColorGreen,
+                blue: resolved.textColorBlue,
+                alpha: resolved.textColorAlpha
+            )
+            : nil
+
         return WorkspaceBarSnapshot(
             items: items,
             showLabels: resolved.showLabels,
             backgroundOpacity: resolved.backgroundOpacity,
-            barHeight: geometry.barHeight
+            barHeight: geometry.barHeight,
+            accentColorComponents: accentColorComponents,
+            textColorComponents: textColorComponents,
+            labelFontSize: CGFloat(resolved.labelFontSize)
         )
     }
 
@@ -522,6 +543,10 @@ final class WorkspaceBarManager {
 extension WorkspaceBarManager {
     func activeBarCountForTests() -> Int {
         barsByMonitor.count
+    }
+
+    func snapshotForTests(on monitorId: Monitor.ID) -> WorkspaceBarSnapshot? {
+        barsByMonitor[monitorId]?.model.snapshot
     }
 
     func hostingViewIdentifierForTests(on monitorId: Monitor.ID) -> ObjectIdentifier? {

@@ -11,6 +11,13 @@
 <table align="center">
   <tr>
     <td align="center">
+      <a href="https://github.com/adelin-b" title="Adelin Berard">
+        <img src="https://github.com/adelin-b.png?size=96" width="96" alt="Adelin Berard">
+      </a>
+      <br>
+      <a href="https://github.com/adelin-b"><strong>Adelin Berard</strong></a>
+    </td>
+    <td align="center">
       <a href="https://github.com/balazshevesi" title="Balazs Hevesi">
         <img src="https://github.com/balazshevesi.png?size=96" width="96" alt="Balazs Hevesi">
       </a>
@@ -44,6 +51,13 @@
       </a>
       <br>
       <a href="https://github.com/zucram"><strong>Marcus Harlid Davin</strong></a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/zwo-bot" title="mm">
+        <img src="https://github.com/zwo-bot.png?size=96" width="96" alt="mm">
+      </a>
+      <br>
+      <a href="https://github.com/zwo-bot"><strong>mm</strong></a>
     </td>
     <td align="center">
       <a href="https://github.com/georgebastille" title="Rich Hanes">
@@ -111,7 +125,7 @@ Small demo, not fully showing everything, gif recorded at 30fps due to size, som
 - Real quake/sticky terminal using ghostty's libghostty
 - Best-effort macOS native-tab replacement support
 - IPC/CLI
-- Scrathpad/Sticky windows of any app
+- Scratchpad/Sticky windows of any app
 - Niri Overview
 - Unified command palette for windows and app menus
 - App menu anywhere
@@ -385,14 +399,14 @@ Hide or reveal status bar icons using a separator item:
 Access settings by clicking OmniWM's status bar icon and selecting **Settings** or **App Rules**.
 Mouse and gesture settings are available in Settings.
 
-OmniWM stores its editable config at `~/.config/omniwm/settings.json`, while private runtime state lives in `UserDefaults`.
+OmniWM stores its editable config at `~/.config/omniwm/settings.toml`, while private runtime state lives in `UserDefaults`.
 
 - **Editable Config** writes the full canonical settings file, including hotkeys and monitor overrides, so it can be edited directly.
 - **Compact Backup** writes only values that differ from defaults. Import still merges that backup back into the full canonical settings model.
-- **Create Config File**, **Reveal Settings File**, and **Open Settings File** create `settings.json` on first use if it does not exist yet.
+- **Create Config File**, **Reveal Settings File**, and **Open Settings File** create `settings.toml` on first use if it does not exist yet.
 - `updateChecksEnabled` is part of the persisted settings model, so it round-trips through full export, compact backup, and import.
-- Fetched release notes, release URLs, last-check timestamps, and skipped-release state stay out of `settings.json` and remain local runtime or private `UserDefaults` state only.
-- The persisted window restore catalog also stays in private `UserDefaults`. It stores local restore metadata such as workspace target, preferred monitor, floating geometry, and matching window identity fields so managed floating windows can be restored or rescued across relaunches without being exported to `settings.json`.
+- Fetched release notes, release URLs, last-check timestamps, and skipped-release state stay out of `settings.toml` and remain local runtime or private `UserDefaults` state only.
+- The persisted window restore catalog also stays in private `UserDefaults`. It stores local restore metadata such as workspace target, preferred monitor, floating geometry, and matching window identity fields so managed floating windows can be restored or rescued across relaunches without being exported to `settings.toml`.
 
 ## App Rules
 

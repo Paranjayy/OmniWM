@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum ActivationEventSource: String, Sendable {
+enum ActivationEventSource: String, Sendable, Equatable {
     case focusedWindowChanged
     case workspaceDidActivateApplication
     case cgsFrontAppChanged
@@ -159,7 +159,6 @@ final class ServiceLifecycleManager {
         controller.layoutRefreshController.cleanupForMonitorDisconnect(displayId: outputId.displayId, migrateAnimations: false)
 
         controller.niriEngine?.cleanupRemovedMonitor(monitorId)
-        controller.dwindleEngine?.cleanupRemovedMonitor(monitorId)
     }
 
     private func handleMonitorConfigurationChanged() {
@@ -173,7 +172,10 @@ final class ServiceLifecycleManager {
         guard let controller else { return }
         // Invalidate border cache so it gets fully recomputed after monitor change
         // (prevents stale geometry when display ID or coordinate space changes, e.g. KVM switch)
-        controller.borderManager.hideBorder()
+        controller.hideKeyboardFocusBorder(
+            source: .monitorConfigurationChanged,
+            reason: "monitor configuration changed"
+        )
         guard !currentMonitors.isEmpty else { return }
         guard currentMonitors.allSatisfy({ $0.frame.width > 1 && $0.frame.height > 1 }) else { return }
 
@@ -201,7 +203,10 @@ final class ServiceLifecycleManager {
                 controller.ensureFocusedTokenValid(in: workspaceId)
             }
         }
-        _ = controller.renderKeyboardFocusBorder(policy: .direct)
+        _ = controller.renderKeyboardFocusBorder(
+            policy: .direct,
+            source: .appTerminated
+        )
         controller.appInfoCache.evict(pid: pid)
         controller.layoutRefreshController.requestFullRescan(reason: .appTerminated)
     }
@@ -225,8 +230,11 @@ final class ServiceLifecycleManager {
 
     func handleActiveSpaceDidChange() {
         guard let controller else { return }
-        controller.borderManager.hideBorder()
-        controller.workspaceManager.recordReconcileEvent(.activeSpaceChanged(source: .service))
+        controller.hideKeyboardFocusBorder(
+            source: .activeSpaceChanged,
+            reason: "active space changed"
+        )
+        controller.submitRuntimeEvent(.activeSpaceChanged(source: .service))
         controller.layoutRefreshController.requestFullRescan(reason: .activeSpaceChanged)
     }
 
@@ -300,7 +308,7 @@ final class ServiceLifecycleManager {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                _ = self?.controller?.workspaceManager.recordReconcileEvent(.systemSleep(source: .service))
+                _ = self?.controller?.submitRuntimeEvent(.systemSleep(source: .service))
             }
         }
 
@@ -311,7 +319,7 @@ final class ServiceLifecycleManager {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let controller = self?.controller else { return }
-                _ = controller.workspaceManager.recordReconcileEvent(.systemWake(source: .service))
+                _ = controller.submitRuntimeEvent(.systemWake(source: .service))
                 controller.layoutRefreshController.requestFullRescan(reason: .unlock)
             }
         }
@@ -333,7 +341,7 @@ final class ServiceLifecycleManager {
         controller.axEventHandler.cleanup()
 
         controller.tabbedOverlayManager.removeAll()
-        controller.borderManager.cleanup()
+        controller.borderCoordinator.cleanup()
         controller.cleanupUIOnStop()
 
         controller.axManager.cleanup()

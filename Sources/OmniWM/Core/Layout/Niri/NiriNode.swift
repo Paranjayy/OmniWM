@@ -324,6 +324,26 @@ class NiriNode {
         findRoot()?.registerNode(child)
     }
 
+    func replaceChildren(_ newChildren: [NiriNode]) {
+        let root = (self as? NiriRoot) ?? findRoot()
+        let retained = Set(newChildren.map(ObjectIdentifier.init))
+
+        for child in children where !retained.contains(ObjectIdentifier(child)) {
+            child.parent = nil
+            root?.unregisterNode(child)
+        }
+
+        for child in newChildren where child.parent !== self {
+            child.detach()
+        }
+
+        children = newChildren
+        for child in children {
+            child.parent = self
+            root?.registerNode(child)
+        }
+    }
+
     func findNode(by id: NodeId) -> NiriNode? {
         if self.id == id {
             return self
@@ -366,6 +386,10 @@ class NiriContainer: NiriNode {
 
     var widthAnimation: SpringAnimation?
     var targetWidth: CGFloat?
+
+    var planningWidth: CGFloat {
+        targetWidth ?? cachedWidth
+    }
 
     private var _cachedWindowNodes: [NiriWindow]?
 
@@ -589,6 +613,10 @@ class NiriContainer: NiriNode {
         displayMode == .tabbed
     }
 
+    var effectiveSizingMode: SizingMode {
+        windowNodes.contains(where: \.isFullscreen) ? .fullscreen : .normal
+    }
+
     var activeWindow: NiriWindow? {
         let windows = windowNodes
         guard !windows.isEmpty else { return nil }
@@ -662,10 +690,6 @@ class NiriWindow: NiriNode {
     var resolvedHeight: CGFloat?
 
     var resolvedWidth: CGFloat?
-
-    var heightFixedByConstraint: Bool = false
-
-    var widthFixedByConstraint: Bool = false
 
     var lastFocusedTime: Date?
 

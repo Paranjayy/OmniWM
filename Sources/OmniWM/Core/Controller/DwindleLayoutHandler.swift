@@ -6,6 +6,7 @@ import QuartzCore
     weak var controller: WMController?
 
     var dwindleAnimationByDisplay: [CGDirectDisplayID: (WorkspaceDescriptor.ID, Monitor)] = [:]
+    var pendingAnimationStartFrames: [WorkspaceDescriptor.ID: [WindowToken: CGRect]] = [:]
 
     init(controller: WMController?) {
         self.controller = controller
@@ -169,8 +170,11 @@ import QuartzCore
     func swapWindow(direction: Direction) {
         guard let controller else { return }
         withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
             if engine.swapWindows(direction: direction, in: wsId) {
                 controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+            } else {
+                discardPresentationForNextRelayout(workspaceId: wsId)
             }
         }
     }
@@ -178,6 +182,7 @@ import QuartzCore
     func toggleFullscreen() {
         guard let controller else { return }
         withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
             if let token = engine.toggleFullscreen(in: wsId) {
                 _ = controller.workspaceManager.applySessionPatch(
                     .init(
@@ -187,6 +192,8 @@ import QuartzCore
                     )
                 )
                 controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+            } else {
+                discardPresentationForNextRelayout(workspaceId: wsId)
             }
         }
     }
@@ -194,6 +201,7 @@ import QuartzCore
     func cycleSize(forward: Bool) {
         guard let controller else { return }
         withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
             engine.cycleSplitRatio(forward: forward, in: wsId)
             controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
         }
@@ -202,9 +210,61 @@ import QuartzCore
     func balanceSizes() {
         guard let controller else { return }
         withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
             engine.balanceSizes(in: wsId)
             controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
         }
+    }
+
+    func moveSelectionToRoot(stable: Bool) {
+        guard let controller else { return }
+        withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
+            engine.moveSelectionToRoot(stable: stable, in: wsId)
+            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+        }
+    }
+
+    func toggleSplit() {
+        guard let controller else { return }
+        withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
+            engine.toggleOrientation(in: wsId)
+            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+        }
+    }
+
+    func swapSplit() {
+        guard let controller else { return }
+        withDwindleContext { engine, wsId in
+            capturePresentationForNextRelayout(workspaceId: wsId)
+            engine.swapSplit(in: wsId)
+            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+        }
+    }
+
+    func resize(direction: Direction, grow: Bool) {
+        guard let controller else { return }
+        withDwindleContext { engine, wsId in
+            let delta = grow ? engine.settings.resizeStep : -engine.settings.resizeStep
+            capturePresentationForNextRelayout(workspaceId: wsId)
+            engine.resizeSelected(by: delta, direction: direction, in: wsId)
+            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
+        }
+    }
+
+    func summonWindowRight(
+        _ token: WindowToken,
+        beside anchorToken: WindowToken,
+        in workspaceId: WorkspaceDescriptor.ID
+    ) -> Bool {
+        guard let engine = controller?.dwindleEngine else { return false }
+        capturePresentationForNextRelayout(workspaceId: workspaceId)
+        guard engine.summonWindowRight(token, beside: anchorToken, in: workspaceId) else {
+            discardPresentationForNextRelayout(workspaceId: workspaceId)
+            return false
+        }
+        return true
     }
 
     // MARK: - Layout Engine Configuration
@@ -251,6 +311,36 @@ import QuartzCore
         perform(engine, wsId)
     }
 
+    func capturePresentationForNextRelayout(workspaceId wsId: WorkspaceDescriptor.ID) {
+        guard let controller,
+              let engine = controller.dwindleEngine,
+              let monitor = controller.workspaceManager.monitor(for: wsId)
+        else {
+            return
+        }
+
+        let sampleTime = engine.animationClock?.now() ?? CACurrentMediaTime()
+        pendingAnimationStartFrames[wsId] = engine.capturePresentedFrames(
+            in: wsId,
+            at: sampleTime,
+            scale: monitorScale(for: monitor.displayId)
+        )
+    }
+
+    func discardPresentationForNextRelayout(workspaceId wsId: WorkspaceDescriptor.ID) {
+        pendingAnimationStartFrames.removeValue(forKey: wsId)
+    }
+
+    private func consumePresentationForNextRelayout(
+        workspaceId wsId: WorkspaceDescriptor.ID
+    ) -> [WindowToken: CGRect]? {
+        pendingAnimationStartFrames.removeValue(forKey: wsId)
+    }
+
+    private func monitorScale(for displayId: CGDirectDisplayID) -> CGFloat {
+        NSScreen.screens.first(where: { $0.displayId == displayId })?.backingScaleFactor ?? 2.0
+    }
+
     private func makeWorkspaceSnapshot(
         workspaceId wsId: WorkspaceDescriptor.ID,
         monitor: Monitor,
@@ -284,6 +374,7 @@ import QuartzCore
             confirmedFocusedToken: controller.workspaceManager.focusedToken,
             selectedToken: selectedToken,
             settings: controller.settings.resolvedDwindleSettings(for: monitor),
+            displayRefreshRate: controller.layoutRefreshController.layoutState.refreshRateByDisplay[monitor.displayId] ?? 60.0,
             isActiveWorkspace: refreshInput.isActiveWorkspace
         )
     }
@@ -292,9 +383,23 @@ import QuartzCore
         snapshot: DwindleWorkspaceSnapshot,
         engine: DwindleLayoutEngine
     ) -> WorkspaceLayoutPlan {
-        applyResolvedSettings(snapshot.settings, to: engine)
+        syncEngineContext(snapshot, to: engine)
 
-        let oldFrames = engine.currentFrames(in: snapshot.workspaceId)
+        let sampleTime = engine.animationClock?.now() ?? CACurrentMediaTime()
+        let hasNativeFullscreenRestoreCycle = snapshot.windows.contains {
+            $0.isRestoringNativeFullscreen
+        }
+        if hasNativeFullscreenRestoreCycle {
+            discardPresentationForNextRelayout(workspaceId: snapshot.workspaceId)
+        }
+        let oldFrames = hasNativeFullscreenRestoreCycle
+            ? engine.currentFrames(in: snapshot.workspaceId)
+            : consumePresentationForNextRelayout(workspaceId: snapshot.workspaceId)
+                ?? engine.capturePresentedFrames(
+                    in: snapshot.workspaceId,
+                    at: sampleTime,
+                    scale: snapshot.monitor.scale
+                )
         let windowTokens = snapshot.windows.map(\.token)
         _ = engine.syncWindows(
             windowTokens,
@@ -309,7 +414,8 @@ import QuartzCore
 
         let newFrames = engine.calculateLayout(
             for: snapshot.workspaceId,
-            screen: snapshot.monitor.workingFrame
+            screen: snapshot.monitor.workingFrame,
+            scale: snapshot.monitor.scale
         )
 
         let rememberedFocusToken: WindowToken?
@@ -321,17 +427,39 @@ import QuartzCore
             rememberedFocusToken = nil
         }
 
-        engine.animateWindowMovements(
-            oldFrames: oldFrames,
-            newFrames: newFrames,
-            motion: controller?.motionPolicy.snapshot() ?? .enabled
+        let restoreFrameOverrides = resolvedNativeFullscreenRestoreFrames(
+            for: snapshot.windows,
+            workspaceId: snapshot.workspaceId
+        )
+        let frames: [WindowToken: CGRect]
+        let animationsActive: Bool
+        if hasNativeFullscreenRestoreCycle {
+            engine.clearAnimations(in: snapshot.workspaceId)
+            for (token, restoreFrame) in restoreFrameOverrides {
+                engine.findNode(for: token)?.cachedFrame = restoreFrame
+            }
+            frames = newFrames.merging(restoreFrameOverrides) { _, restoreFrame in restoreFrame }
+            animationsActive = false
+        } else {
+            let animationFrames = engine.prepareAnimationFramesForRelayout(
+                oldFrames: oldFrames,
+                newFrames: newFrames,
+                in: snapshot.workspaceId,
+                motion: controller?.motionPolicy.snapshot() ?? .enabled,
+                scale: snapshot.monitor.scale,
+                at: sampleTime
+            )
+            frames = animationFrames.frames
+            animationsActive = animationFrames.animationsActive
+        }
+        recordManagedRestoreGeometry(
+            windows: snapshot.windows,
+            frames: hasNativeFullscreenRestoreCycle ? frames : newFrames
         )
 
-        let now = CACurrentMediaTime()
-        let animationsActive = engine.hasActiveAnimations(in: snapshot.workspaceId, at: now)
         let diff = layoutDiff(
             windows: snapshot.windows,
-            frames: newFrames,
+            frames: frames,
             confirmedFocusedToken: snapshot.confirmedFocusedToken,
             directBorderUpdate: animationsActive,
             canRestoreHiddenWorkspaceWindows: snapshot.isActiveWorkspace
@@ -340,7 +468,7 @@ import QuartzCore
             ? [.startDwindleAnimation(workspaceId: snapshot.workspaceId, monitorId: snapshot.monitor.monitorId)]
             : []
 
-        return WorkspaceLayoutPlan(
+        var plan = WorkspaceLayoutPlan(
             workspaceId: snapshot.workspaceId,
             monitor: snapshot.monitor,
             sessionPatch: WorkspaceSessionPatch(
@@ -350,18 +478,25 @@ import QuartzCore
             diff: diff,
             animationDirectives: directives
         )
+        plan.nativeFullscreenRestoreFinalizeTokens = nativeFullscreenRestoreFinalizeTokens(
+            windows: snapshot.windows,
+            frames: frames
+        )
+        return plan
     }
 
     private func buildOnDemandLayoutPlan(
         snapshot: DwindleWorkspaceSnapshot,
         engine: DwindleLayoutEngine
     ) -> WorkspaceLayoutPlan {
-        applyResolvedSettings(snapshot.settings, to: engine)
+        syncEngineContext(snapshot, to: engine)
 
         let frames = engine.calculateLayout(
             for: snapshot.workspaceId,
-            screen: snapshot.monitor.workingFrame
+            screen: snapshot.monitor.workingFrame,
+            scale: snapshot.monitor.scale
         )
+        recordManagedRestoreGeometry(windows: snapshot.windows, frames: frames)
         let diff = layoutDiff(
             windows: snapshot.windows,
             frames: frames,
@@ -383,24 +518,26 @@ import QuartzCore
         engine: DwindleLayoutEngine,
         targetTime: TimeInterval
     ) -> WorkspaceLayoutPlan {
-        applyResolvedSettings(snapshot.settings, to: engine)
+        syncEngineContext(snapshot, to: engine)
 
         let baseFrames = engine.calculateLayout(
             for: snapshot.workspaceId,
-            screen: snapshot.monitor.workingFrame
+            screen: snapshot.monitor.workingFrame,
+            scale: snapshot.monitor.scale
         )
-        let animatedFrames = engine.calculateAnimatedFrames(
-            baseFrames: baseFrames,
+        recordManagedRestoreGeometry(windows: snapshot.windows, frames: baseFrames)
+        let animationFrames = engine.animationFrames(
+            from: baseFrames,
             in: snapshot.workspaceId,
-            at: targetTime
+            at: targetTime,
+            scale: snapshot.monitor.scale
         )
-        let animationsActive = engine.hasActiveAnimations(in: snapshot.workspaceId, at: targetTime)
         let diff = layoutDiff(
             windows: snapshot.windows,
-            frames: animatedFrames,
+            frames: animationFrames.frames,
             confirmedFocusedToken: snapshot.confirmedFocusedToken,
-            directBorderUpdate: animationsActive,
-            borderMode: animationsActive ? .direct : .coordinated,
+            directBorderUpdate: animationFrames.animationsActive,
+            borderMode: animationFrames.animationsActive ? .direct : .coordinated,
             canRestoreHiddenWorkspaceWindows: snapshot.isActiveWorkspace
         )
 
@@ -454,7 +591,7 @@ import QuartzCore
                 LayoutFrameChange(
                     token: window.token,
                     frame: frame,
-                    forceApply: false
+                    forceApply: window.isRestoringNativeFullscreen
                 )
             )
         }
@@ -472,20 +609,70 @@ import QuartzCore
         return diff
     }
 
-    private func applyResolvedSettings(
-        _ settings: ResolvedDwindleSettings,
+    private func syncEngineContext(
+        _ snapshot: DwindleWorkspaceSnapshot,
         to engine: DwindleLayoutEngine
     ) {
-        engine.settings.smartSplit = settings.smartSplit
-        engine.settings.defaultSplitRatio = settings.defaultSplitRatio
-        engine.settings.splitWidthMultiplier = settings.splitWidthMultiplier
-        engine.settings.singleWindowAspectRatio = settings.singleWindowAspectRatio.size
-        engine.settings.innerGap = settings.innerGap
-        engine.settings.outerGapTop = settings.outerGapTop
-        engine.settings.outerGapBottom = settings.outerGapBottom
-        engine.settings.outerGapLeft = settings.outerGapLeft
-        engine.settings.outerGapRight = settings.outerGapRight
+        engine.settings.smartSplit = snapshot.settings.smartSplit
+        engine.settings.defaultSplitRatio = snapshot.settings.defaultSplitRatio
+        engine.settings.splitWidthMultiplier = snapshot.settings.splitWidthMultiplier
+        engine.settings.singleWindowAspectRatio = snapshot.settings.singleWindowAspectRatio.size
+        engine.settings.innerGap = snapshot.settings.innerGap
+        engine.settings.outerGapTop = snapshot.settings.outerGapTop
+        engine.settings.outerGapBottom = snapshot.settings.outerGapBottom
+        engine.settings.outerGapLeft = snapshot.settings.outerGapLeft
+        engine.settings.outerGapRight = snapshot.settings.outerGapRight
+        engine.displayRefreshRate = snapshot.displayRefreshRate
     }
 }
 
 extension DwindleLayoutHandler: LayoutFocusable, LayoutSizable {}
+
+private extension DwindleLayoutHandler {
+    func resolvedNativeFullscreenRestoreFrames(
+        for windows: [LayoutWindowSnapshot],
+        workspaceId: WorkspaceDescriptor.ID
+    ) -> [WindowToken: CGRect] {
+        guard let topologyProfile = controller?.workspaceManager.topologyProfile else { return [:] }
+
+        var restoreFrames: [WindowToken: CGRect] = [:]
+        for window in windows {
+            guard let restoreContext = window.nativeFullscreenRestore,
+                  restoreContext.currentToken == window.token,
+                  restoreContext.workspaceId == workspaceId,
+                  restoreContext.capturedTopologyProfile == topologyProfile,
+                  let restoreFrame = restoreContext.restoreFrame
+            else {
+                continue
+            }
+            restoreFrames[window.token] = restoreFrame
+        }
+        return restoreFrames
+    }
+
+    func nativeFullscreenRestoreFinalizeTokens(
+        windows: [LayoutWindowSnapshot],
+        frames: [WindowToken: CGRect]
+    ) -> [WindowToken] {
+        return windows.compactMap { window in
+            guard window.isRestoringNativeFullscreen,
+                  window.restoreFrame != nil,
+                  frames[window.token] != nil
+            else {
+                return nil
+            }
+            return window.token
+        }
+    }
+
+    func recordManagedRestoreGeometry(
+        windows: [LayoutWindowSnapshot],
+        frames: [WindowToken: CGRect]
+    ) {
+        guard let controller else { return }
+        for window in windows where !window.isNativeFullscreenSuspended {
+            guard let frame = frames[window.token] else { continue }
+            controller.recordManagedRestoreGeometry(for: window.token, frame: frame)
+        }
+    }
+}

@@ -487,13 +487,20 @@ final class CommandHandler {
             if currentState {
                 _ = controller.workspaceManager.requestNativeFullscreenExit(token, initiatedByCommand: true)
                 guard setFullscreen(entry.axRef, false) else {
-                    _ = controller.workspaceManager.markNativeFullscreenSuspended(token)
+                    _ = controller.suspendManagedWindowForNativeFullscreen(
+                        token,
+                        path: .commandExitSetFailure
+                    )
                     return
                 }
                 return
             }
 
-            _ = controller.workspaceManager.requestNativeFullscreenEnter(token, in: entry.workspaceId)
+            _ = controller.requestManagedNativeFullscreenEnter(
+                token,
+                in: entry.workspaceId,
+                path: .commandDrivenEnter
+            )
             guard setFullscreen(entry.axRef, true) else {
                 _ = controller.workspaceManager.restoreNativeFullscreenRecord(for: token)
                 return
@@ -518,7 +525,10 @@ final class CommandHandler {
 
         _ = controller.workspaceManager.requestNativeFullscreenExit(token, initiatedByCommand: true)
         guard setFullscreen(entry.axRef, false) else {
-            _ = controller.workspaceManager.markNativeFullscreenSuspended(token)
+            _ = controller.suspendManagedWindowForNativeFullscreen(
+                token,
+                path: .commandExitSetFailure
+            )
             return
         }
     }
@@ -559,36 +569,22 @@ final class CommandHandler {
 
     private func moveToRootInDwindle() {
         guard let controller else { return }
-        controller.dwindleLayoutHandler.withDwindleContext { engine, wsId in
-            let stable = controller.settings.dwindleMoveToRootStable
-            engine.moveSelectionToRoot(stable: stable, in: wsId)
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
-        }
+        controller.dwindleLayoutHandler.moveSelectionToRoot(stable: controller.settings.dwindleMoveToRootStable)
     }
 
     private func toggleSplitInDwindle() {
         guard let controller else { return }
-        controller.dwindleLayoutHandler.withDwindleContext { engine, wsId in
-            engine.toggleOrientation(in: wsId)
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
-        }
+        controller.dwindleLayoutHandler.toggleSplit()
     }
 
     private func swapSplitInDwindle() {
         guard let controller else { return }
-        controller.dwindleLayoutHandler.withDwindleContext { engine, wsId in
-            engine.swapSplit(in: wsId)
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
-        }
+        controller.dwindleLayoutHandler.swapSplit()
     }
 
     private func resizeInDirectionInDwindle(direction: Direction, grow: Bool) {
         guard let controller else { return }
-        controller.dwindleLayoutHandler.withDwindleContext { engine, wsId in
-            let delta = grow ? engine.settings.resizeStep : -engine.settings.resizeStep
-            engine.resizeSelected(by: delta, direction: direction, in: wsId)
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .layoutCommand)
-        }
+        controller.dwindleLayoutHandler.resize(direction: direction, grow: grow)
     }
 
     private func preselectInDwindle(direction: Direction) {

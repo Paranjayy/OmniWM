@@ -131,10 +131,7 @@ final class NiriLayoutEngine {
     var resizeConfiguration = ResizeConfiguration.default
     var moveConfiguration = MoveConfiguration.default
 
-    var windowMovementAnimationConfig: SpringConfig = .balanced.with(
-        epsilon: 0.0001,
-        velocityEpsilon: 0.01
-    )
+    var windowMovementAnimationConfig: SpringConfig = .snappy
     var animationClock: AnimationClock?
     var displayRefreshRate: Double = 60.0
 
@@ -309,6 +306,22 @@ final class NiriLayoutEngine {
             x += columns[i].cachedWidth + gaps
         }
         return x
+    }
+
+    func columnPlanningX(at index: Int, columns: [NiriContainer], gaps: CGFloat) -> CGFloat {
+        var x: CGFloat = 0
+        for i in 0 ..< index where i < columns.count {
+            x += columns[i].planningWidth + gaps
+        }
+        return x
+    }
+
+    func totalPlanningWidth(columns: [NiriContainer], gaps: CGFloat) -> CGFloat {
+        guard !columns.isEmpty else { return 0 }
+        let totalColumnWidth = columns.reduce(CGFloat.zero) { partial, column in
+            partial + column.planningWidth
+        }
+        return totalColumnWidth + gaps * CGFloat(max(0, columns.count - 1))
     }
 
     func findColumn(containing window: NiriWindow, in workspaceId: WorkspaceDescriptor.ID) -> NiriContainer? {

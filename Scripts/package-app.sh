@@ -15,22 +15,14 @@ BUILD_DIR="$ROOT_DIR/.build/apple/Products/$CONFIG_CAPITALIZED"
 EXECUTABLE="$BUILD_DIR/OmniWM"
 CLI_EXECUTABLE="$BUILD_DIR/omniwmctl"
 APP_DIR="$ROOT_DIR/dist/OmniWM.app"
-GHOSTTY_LIBRARY="$OMNIWM_GHOSTTY_ARCHIVE_PATH"
-GHOSTTY_LIBRARY_DIR="$OMNIWM_GHOSTTY_ARCHIVE_DIR"
 
 # Signing identity and notarization profile
 SIGNING_IDENTITY="Developer ID Application: Oliver Nikolic (VF8LDJRGFM)"
 NOTARIZE_PROFILE="OmniWM-Notarize"
 ENTITLEMENTS="$ROOT_DIR/OmniWM.entitlements"
 
-echo "Building Zig kernels..."
-"$ROOT_DIR/Scripts/build-zig-kernels.sh" "$CONFIG"
-
-omniwm_setup_ghostty_library_path
-echo "Using Zig $(zig version)"
-echo "Using Ghostty archive digest $(omniwm_actual_ghostty_archive_sha256)"
 echo "Building OmniWM universal binary ($CONFIG)..."
-swift build -c "$CONFIG" --arch arm64 --arch x86_64
+"$ROOT_DIR/Scripts/build-universal-products.sh" "$CONFIG"
 
 echo "Verifying universal binary..."
 lipo -info "$EXECUTABLE"
@@ -46,6 +38,12 @@ cp "$CLI_EXECUTABLE" "$APP_DIR/Contents/MacOS/omniwmctl"
 cp "$ROOT_DIR/Info.plist" "$APP_DIR/Contents/Info.plist"
 cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 cp -R "$BUILD_DIR/OmniWM_OmniWM.bundle" "$APP_DIR/Contents/Resources/"
+
+RESOURCE_BUNDLE_DIR="$APP_DIR/Contents/Resources/OmniWM_OmniWM.bundle"
+# SwiftPM currently copies build-tool plugin outputs into the resource bundle,
+# but the app only needs the processed image assets at runtime.
+rm -rf "$RESOURCE_BUNDLE_DIR/cache" "$RESOURCE_BUNDLE_DIR/debug" "$RESOURCE_BUNDLE_DIR/release"
+rm -f "$RESOURCE_BUNDLE_DIR/kernels-built.txt"
 
 if command -v plutil >/dev/null 2>&1; then
   plutil -lint "$APP_DIR/Contents/Info.plist" >/dev/null

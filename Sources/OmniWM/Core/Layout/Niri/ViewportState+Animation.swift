@@ -3,12 +3,12 @@ import Foundation
 
 extension ViewportState {
     func viewPosPixels(columns: [NiriContainer], gap: CGFloat) -> CGFloat {
-        let activeColX = columnX(at: activeColumnIndex, columns: columns, gap: gap)
+        let activeColX = columnPlanningX(at: activeColumnIndex, columns: columns, gap: gap)
         return activeColX + viewOffsetPixels.current()
     }
 
     func targetViewPosPixels(columns: [NiriContainer], gap: CGFloat) -> CGFloat {
-        let activeColX = columnX(at: activeColumnIndex, columns: columns, gap: gap)
+        let activeColX = columnPlanningX(at: activeColumnIndex, columns: columns, gap: gap)
         return activeColX + viewOffsetPixels.target()
     }
 
@@ -111,35 +111,12 @@ extension ViewportState {
     }
 
     mutating func restoreViewOffset(_ offset: CGFloat) {
-        viewOffsetPixels = .static(offset)
-        viewOffsetToRestore = nil
-    }
-
-    mutating func animateViewOffsetRestore(_ offset: CGFloat, motion: MotionSnapshot) {
         guard !viewOffsetPixels.isGesture else {
             viewOffsetToRestore = nil
             return
         }
 
-        guard motion.animationsEnabled else {
-            viewOffsetPixels = .static(offset)
-            viewOffsetToRestore = nil
-            return
-        }
-
-        let now = animationClock?.now() ?? CACurrentMediaTime()
-        let currentOffset = viewOffsetPixels.current()
-        let velocity = viewOffsetPixels.currentVelocity()
-
-        let animation = SpringAnimation(
-            from: Double(currentOffset),
-            to: Double(offset),
-            initialVelocity: velocity,
-            startTime: now,
-            config: springConfig,
-            displayRefreshRate: displayRefreshRate
-        )
-        viewOffsetPixels = .spring(animation)
+        viewOffsetPixels = .static(offset)
         viewOffsetToRestore = nil
     }
 
