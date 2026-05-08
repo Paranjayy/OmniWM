@@ -130,7 +130,6 @@ function CommandItem({ name, title, summary, icon, color, hasDirections }: {
   hasDirections?: boolean 
 }) {
   const { push } = useNavigation();
-
   return (
     <List.Item
       title={title}
