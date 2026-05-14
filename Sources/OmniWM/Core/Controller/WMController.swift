@@ -1418,7 +1418,7 @@ final class WMController {
               let existingEntry,
               existingEntry.mode == .tiling,
               trackedMode == .floating,
-              decision.source == .heuristic
+              (decision.source == .heuristic || decision.layoutDecisionKind == .fallbackLayout)
         else {
             return trackedMode
         }
