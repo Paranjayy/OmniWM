@@ -197,6 +197,16 @@ private extension String {
         }
     }
 
+    @Test func legacyHyperTriggerAliasesDecodeToCanonicalOptionModifier() throws {
+        let data = try SettingsTOMLCodec.encode(SettingsExport.defaults())
+        let output = try #require(String(data: data, encoding: .utf8))
+        let legacyAlias = output.replacingOccurrences(of: "hyperTrigger = \"Option\"", with: "hyperTrigger = \"Left Option\"")
+
+        let decoded = try SettingsTOMLCodec.decode(Data(legacyAlias.utf8))
+
+        #expect(decoded.hyperTrigger == .modifier(UInt32(optionKey)))
+    }
+
     @Test func encodeProducesSectionedToml() throws {
         let data = try SettingsTOMLCodec.encode(SettingsExport.defaults())
         let output = try #require(String(data: data, encoding: .utf8))

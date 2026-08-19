@@ -178,17 +178,22 @@ enum KeySymbolMapper {
         nameToKeyCode[name] ?? normalizedNameToKeyCode[normalizeName(name)]
     }
 
-    static let nameToModifier: [String: UInt32] = [
-        "Control": UInt32(controlKey),
-        "Option": UInt32(optionKey),
-        "Shift": UInt32(shiftKey),
-        "Command": UInt32(cmdKey),
-        "Hyper": hyperModifiers
-    ]
-
-    private static let normalizedNameToModifier: [String: UInt32] = {
-        Dictionary(uniqueKeysWithValues: nameToModifier.map { (normalizeName($0.key), $0.value) })
-    }()
+    static func modifierMask(named name: String) -> UInt32? {
+        switch normalizeName(name) {
+        case "control", "leftcontrol", "rightcontrol":
+            return UInt32(controlKey)
+        case "option", "leftoption", "rightoption":
+            return UInt32(optionKey)
+        case "shift", "leftshift", "rightshift":
+            return UInt32(shiftKey)
+        case "command", "leftcommand", "rightcommand":
+            return UInt32(cmdKey)
+        case "hyper":
+            return hyperModifiers
+        default:
+            return nil
+        }
+    }
 
     static func fromHumanReadable(_ string: String) -> KeyBinding? {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -204,7 +209,7 @@ enum KeySymbolMapper {
                 usesHyper = true
                 continue
             }
-            guard let flag = nameToModifier[part] ?? normalizedNameToModifier[normalizeName(part)] else { return nil }
+            guard let flag = modifierMask(named: part) else { return nil }
             modifiers |= flag
         }
         return KeyBinding(keyCode: keyCode, modifiers: modifiers, usesHyper: usesHyper)

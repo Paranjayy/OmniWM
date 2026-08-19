@@ -243,18 +243,7 @@ enum HyperKeyTrigger: Equatable, Hashable {
     }
 
     static func modifierMask(named name: String) -> UInt32? {
-        switch name.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").lowercased() {
-        case "shift":
-            return UInt32(shiftKey)
-        case "control":
-            return UInt32(controlKey)
-        case "option":
-            return UInt32(optionKey)
-        case "command":
-            return UInt32(cmdKey)
-        default:
-            return nil
-        }
+        KeySymbolMapper.modifierMask(named: name)
     }
 }
 
